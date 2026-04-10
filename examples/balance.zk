@@ -1,0 +1,11 @@
+circuit balance {
+    public expected: field;
+    private left: field;
+    private right: field;
+
+    let combined = left + right;
+    let adjusted = combined - 5;
+    constrain adjusted == expected;
+    expose combined;
+    expose adjusted;
+}

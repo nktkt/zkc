@@ -1,0 +1,10 @@
+circuit product_check {
+    public x: field;
+    private y: field;
+
+    let product = x * y;
+    let shifted = product + 3;
+    constrain shifted == 38;
+    expose product;
+    expose shifted as shifted_value;
+}
