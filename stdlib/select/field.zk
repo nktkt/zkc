@@ -1,0 +1,27 @@
+include "@std/bool/core.zk";
+
+fn select3_field(
+    first_gate: bool,
+    second_gate: bool,
+    first: field,
+    second: field,
+    third: field
+) -> field {
+    if first_gate { first } else { if second_gate { second } else { third } }
+}
+
+fn select_bias_field(flag: bool, value: field, if_true_bias: field, if_false_bias: field) -> field {
+    if flag { value + if_true_bias } else { value + if_false_bias }
+}
+
+fn guarded_add_field(flag: bool, lhs: field, rhs: field) -> field {
+    if flag { lhs + rhs } else { lhs }
+}
+
+fn guarded_mul_field(flag: bool, lhs: field, rhs: field) -> field {
+    if flag { lhs * rhs } else { lhs }
+}
+
+fn routed_sum_field(left_flag: bool, right_flag: bool, left: field, mid: field, right: field) -> field {
+    select3_field(left_flag, right_flag, left + mid, mid, mid + right)
+}

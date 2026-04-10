@@ -1,0 +1,6 @@
+# EXPECT-ERROR: duplicate declaration for `x`
+circuit duplicate_binding {
+    public x: field;
+    let x = 1;
+    expose x;
+}

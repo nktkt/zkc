@@ -1,0 +1,12 @@
+circuit logic_demo {
+    public expected: bool;
+    private a: bool;
+    private b: bool;
+
+    let left = and(a, not(b));
+    let right = xor(a, b);
+    let result = or(left, right);
+
+    constrain result == expected;
+    expose result;
+}

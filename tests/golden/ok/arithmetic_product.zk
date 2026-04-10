@@ -1,0 +1,13 @@
+# RUN: --public x=5 --private y=7
+# EXPECT-OUTPUT: product=35
+# EXPECT-OUTPUT: shifted_value=38
+circuit arithmetic_product {
+    public x: field;
+    private y: field;
+
+    let product = x * y;
+    let shifted = product + 3;
+    constrain shifted == 38;
+    expose product;
+    expose shifted as shifted_value;
+}

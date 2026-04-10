@@ -1,0 +1,7 @@
+# EXPECT-ERROR: failed to resolve
+circuit missing_stdlib_module {
+    include "@std/does/not_exist.zk";
+
+    public x: field;
+    expose x;
+}

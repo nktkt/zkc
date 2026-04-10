@@ -1,0 +1,12 @@
+# RUN: --public expected=11 --public gate=false --private x=4 --private y=10
+# EXPECT-OUTPUT: selected=11
+circuit bool_if_false {
+    public expected: field;
+    public gate: bool;
+    private x: field;
+    private y: field;
+
+    let selected = if gate { x + 5 } else { y + 1 };
+    constrain selected == expected;
+    expose selected;
+}

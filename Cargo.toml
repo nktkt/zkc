@@ -2,5 +2,11 @@
 name = "zkc"
 version = "0.1.0"
 edition = "2024"
+description = "A tiny zero-knowledge-oriented language and compiler prototype."
+license = "MIT"
+repository = "https://github.com/nktkt/zkc"
+readme = "README.md"
+keywords = ["zk", "compiler", "dsl", "cryptography"]
+categories = ["compilers", "cryptography"]
 
 [dependencies]

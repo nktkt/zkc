@@ -10,6 +10,11 @@ pub struct Token {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenKind {
     Circuit,
+    Fn,
+    If,
+    Else,
+    Include,
+    Import,
     Public,
     Private,
     Let,
@@ -17,13 +22,20 @@ pub enum TokenKind {
     Expose,
     As,
     Field,
+    Bool,
+    True,
+    False,
     Ident(String),
+    String(String),
     Number(i128),
     LBrace,
     RBrace,
     LParen,
     RParen,
+    Comma,
     Colon,
+    ColonColon,
+    Arrow,
     Semicolon,
     Equal,
     EqualEqual,
@@ -85,9 +97,18 @@ impl Lexer {
                     self.advance();
                     TokenKind::RParen
                 }
+                ',' => {
+                    self.advance();
+                    TokenKind::Comma
+                }
                 ':' => {
                     self.advance();
-                    TokenKind::Colon
+                    if self.peek() == Some(':') {
+                        self.advance();
+                        TokenKind::ColonColon
+                    } else {
+                        TokenKind::Colon
+                    }
                 }
                 ';' => {
                     self.advance();
@@ -99,7 +120,12 @@ impl Lexer {
                 }
                 '-' => {
                     self.advance();
-                    TokenKind::Minus
+                    if self.peek() == Some('>') {
+                        self.advance();
+                        TokenKind::Arrow
+                    } else {
+                        TokenKind::Minus
+                    }
                 }
                 '*' => {
                     self.advance();
@@ -114,6 +140,7 @@ impl Lexer {
                         TokenKind::Equal
                     }
                 }
+                '"' => self.lex_string(span)?,
                 ch if is_ident_start(ch) => self.lex_identifier(),
                 ch if ch.is_ascii_digit() => self.lex_number(span)?,
                 other => {
@@ -171,6 +198,11 @@ impl Lexer {
 
         match ident.as_str() {
             "circuit" => TokenKind::Circuit,
+            "fn" => TokenKind::Fn,
+            "if" => TokenKind::If,
+            "else" => TokenKind::Else,
+            "include" => TokenKind::Include,
+            "import" => TokenKind::Import,
             "public" => TokenKind::Public,
             "private" => TokenKind::Private,
             "let" => TokenKind::Let,
@@ -178,6 +210,9 @@ impl Lexer {
             "expose" => TokenKind::Expose,
             "as" => TokenKind::As,
             "field" => TokenKind::Field,
+            "bool" => TokenKind::Bool,
+            "true" => TokenKind::True,
+            "false" => TokenKind::False,
             _ => TokenKind::Ident(ident),
         }
     }
@@ -196,6 +231,47 @@ impl Lexer {
             CompileError::new(span, format!("invalid integer literal `{literal}`: {err}"))
         })?;
         Ok(TokenKind::Number(parsed))
+    }
+
+    fn lex_string(&mut self, span: Span) -> CompileResult<TokenKind> {
+        self.advance();
+        let mut value = String::new();
+
+        while let Some(ch) = self.peek() {
+            match ch {
+                '"' => {
+                    self.advance();
+                    return Ok(TokenKind::String(value));
+                }
+                '\\' => {
+                    self.advance();
+                    let escaped = match self.peek() {
+                        Some('"') => '"',
+                        Some('\\') => '\\',
+                        Some('n') => '\n',
+                        Some('r') => '\r',
+                        Some('t') => '\t',
+                        Some(other) => {
+                            return Err(CompileError::new(
+                                span,
+                                format!("unsupported string escape `\\{other}`"),
+                            ));
+                        }
+                        None => {
+                            return Err(CompileError::new(span, "unterminated string literal"));
+                        }
+                    };
+                    self.advance();
+                    value.push(escaped);
+                }
+                _ => {
+                    value.push(ch);
+                    self.advance();
+                }
+            }
+        }
+
+        Err(CompileError::new(span, "unterminated string literal"))
     }
 
     fn peek(&self) -> Option<char> {

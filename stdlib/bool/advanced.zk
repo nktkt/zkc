@@ -1,0 +1,30 @@
+include "@std/bool/core.zk";
+include "@std/arith/constants.zk";
+
+fn majority3_bool(a: bool, b: bool, c: bool) -> bool {
+    or(and(a, b), or(and(a, c), and(b, c)))
+}
+
+fn parity3_bool(a: bool, b: bool, c: bool) -> bool {
+    xor(xor(a, b), c)
+}
+
+fn consensus3_bool(a: bool, b: bool, c: bool) -> bool {
+    and(or(a, b), and(or(a, c), or(b, c)))
+}
+
+fn bool_toggle_if(flag: bool, value: bool) -> bool {
+    xor(flag, value)
+}
+
+fn bool_route_pair(flag: bool, left: bool, right: bool) -> bool {
+    bool_select_bool(flag, left, right)
+}
+
+fn double_not_bool(value: bool) -> bool {
+    bool_identity(not(not(value)))
+}
+
+fn majority_with_default(flag: bool, other: bool) -> bool {
+    majority3_bool(flag, other, const_false())
+}

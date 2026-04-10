@@ -1,0 +1,19 @@
+include "@std/bool/advanced.zk";
+include "@std/patterns/blends.zk";
+include "@std/patterns/gated.zk";
+
+fn pipeline_stage1(value: field) -> field {
+    square_plus(value, 2)
+}
+
+fn pipeline_stage2(flag: bool, left: field, right: field) -> field {
+    if flag { gated_shifted_sum(true, left, right) } else { gated_shifted_sum(false, left, right) }
+}
+
+fn pipeline_score(flag: bool, x: field, y: field, z: field) -> field {
+    if flag { blend_quartet(x, y, z, 1) } else { blend_triplet(false, x, y, z) }
+}
+
+fn pipeline_route(primary: bool, secondary: bool, x: field, y: field, z: field) -> field {
+    if majority3_bool(primary, secondary, false) { weighted_tail(x, y, z, 1) } else { gated_weighted_mix(secondary, x, y, z) }
+}

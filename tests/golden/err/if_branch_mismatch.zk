@@ -1,0 +1,7 @@
+# EXPECT-ERROR: `if` branches must have the same type
+circuit if_branch_mismatch {
+    public gate: bool;
+    public x: field;
+    let result = if gate { x } else { false };
+    expose result;
+}

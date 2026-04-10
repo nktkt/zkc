@@ -1,0 +1,16 @@
+circuit imports_demo {
+    import "modules/left.zk" as left;
+    import "modules/right.zk" as right;
+
+    public expected: field;
+    public gate: bool;
+    private x: field;
+    private y: field;
+
+    let left_score = left::score(x, gate);
+    let right_score = right::score(y, gate);
+    let result = left_score + right_score;
+
+    constrain result == expected;
+    expose result;
+}

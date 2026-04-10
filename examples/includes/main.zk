@@ -1,0 +1,17 @@
+circuit include_demo {
+    include "lib/math.zk";
+    include "lib/logic.zk";
+
+    public expected: field;
+    public gate: bool;
+    private x: field;
+    private y: field;
+
+    let base = shifted_square(x);
+    let fallback = adjusted(y);
+    let result = choose_bonus(gate, base, fallback);
+
+    constrain result == expected;
+    expose result;
+    expose gate as gate_value;
+}

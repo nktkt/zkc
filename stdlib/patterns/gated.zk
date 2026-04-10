@@ -1,0 +1,18 @@
+include "@std/arith/polynomials.zk";
+include "@std/select/field.zk";
+
+fn gated_square_plus(flag: bool, value: field, offset: field) -> field {
+    bool_select_field(flag, square_plus(value, offset), value)
+}
+
+fn gated_shifted_sum(flag: bool, lhs: field, rhs: field) -> field {
+    guarded_add_field(flag, lhs + rhs, 3)
+}
+
+fn gated_weighted_mix(flag: bool, a: field, b: field, c: field) -> field {
+    if flag { mul_add(a, b, c) } else { sum3(a, b, c) }
+}
+
+fn gated_quartic(flag: bool, value: field) -> field {
+    if flag { quartic_seed(value) } else { square_plus(value, 1) }
+}

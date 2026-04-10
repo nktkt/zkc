@@ -1,0 +1,41 @@
+fn sum5_fields(a: field, b: field, c: field, d: field, e: field) -> field {
+    sum4(a, b, c, d) + e
+}
+
+fn sum6_fields(a: field, b: field, c: field, d: field, e: field, f: field) -> field {
+    sum3(a, b, c) + sum3(d, e, f)
+}
+
+fn weighted_sum4_fields(
+    a: field,
+    wa: field,
+    b: field,
+    wb: field,
+    c: field,
+    wc: field,
+    d: field,
+    wd: field
+) -> field {
+    blend2(a, wa, b, wb) + blend2(c, wc, d, wd)
+}
+
+fn linear_combo4_fields(
+    a: field,
+    b: field,
+    c: field,
+    d: field,
+    wa: field,
+    wb: field,
+    wc: field,
+    wd: field
+) -> field {
+    weighted_sum4_fields(a, wa, b, wb, c, wc, d, wd)
+}
+
+fn tail_sum3_fields(head: field, a: field, b: field, c: field) -> field {
+    head + sum3(a, b, c)
+}
+
+fn ladder_sum5_fields(a: field, b: field, c: field, d: field, e: field) -> field {
+    sum2(sum2(a, b), sum3(c, d, e))
+}

@@ -1,0 +1,6 @@
+# EXPECT-ERROR: `if` condition must have type `bool`
+circuit if_condition_not_bool {
+    public x: field;
+    let result = if x { 1 } else { 0 };
+    expose result;
+}

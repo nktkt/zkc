@@ -1,0 +1,13 @@
+circuit builtins_demo {
+    public expected: field;
+    private a: field;
+    private b: field;
+    private c: field;
+
+    let left = square(a);
+    let middle = mul_add(b, 3, 1);
+    let right = weighted_sum3(a, 2, b, 3, c, 4);
+    let result = sum3(left, middle, right);
+    constrain result == expected;
+    expose result;
+}

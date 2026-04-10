@@ -1,0 +1,11 @@
+# RUN: --public expected=26 --private a=2 --private b=5
+# EXPECT-OUTPUT: result=26
+circuit builtin_blend {
+    public expected: field;
+    private a: field;
+    private b: field;
+
+    let result = blend2(a, 3, b, 4);
+    constrain result == expected;
+    expose result;
+}

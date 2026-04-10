@@ -1,0 +1,18 @@
+include "@std/arith/accumulators.zk";
+include "@std/select/field.zk";
+
+fn blend_triplet(flag: bool, a: field, b: field, c: field) -> field {
+    if flag { sum3(a, b, c) } else { weighted_sum4_fields(a, 1, b, 2, c, 3, 0, 0) }
+}
+
+fn blend_quartet(a: field, b: field, c: field, d: field) -> field {
+    weighted_sum4_fields(a, 1, b, 2, c, 3, d, 4)
+}
+
+fn gated_blend_pair(flag: bool, a: field, b: field, wa: field, wb: field) -> field {
+    if flag { blend2(a, wa, b, wb) } else { a + b }
+}
+
+fn weighted_tail(head: field, a: field, b: field, c: field) -> field {
+    head + weighted_sum3(a, 2, b, 3, c, 4)
+}

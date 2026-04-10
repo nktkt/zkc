@@ -1,0 +1,11 @@
+# RUN: --public expected=true --private a=true --private b=false
+# EXPECT-OUTPUT: result=1
+circuit bool_logic {
+    public expected: bool;
+    private a: bool;
+    private b: bool;
+
+    let result = xor(or(a, b), and(a, b));
+    constrain result == expected;
+    expose result;
+}

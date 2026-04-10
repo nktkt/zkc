@@ -1,0 +1,9 @@
+# EXPECT-ERROR: duplicate declaration for `square`
+circuit duplicate_builtin_name {
+    fn square(value: field) -> field {
+        value
+    }
+
+    public x: field;
+    expose x;
+}

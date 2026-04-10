@@ -1,0 +1,11 @@
+circuit cubic {
+    public target: field;
+    private x: field;
+
+    let square = x * x;
+    let cube = square * x;
+    let shifted = cube + 11;
+    constrain shifted == target;
+    expose cube;
+    expose shifted;
+}

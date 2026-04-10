@@ -1,0 +1,23 @@
+include "@std/bool/advanced.zk";
+
+fn select3_bool(
+    first_gate: bool,
+    second_gate: bool,
+    first: bool,
+    second: bool,
+    third: bool
+) -> bool {
+    if first_gate { first } else { if second_gate { second } else { third } }
+}
+
+fn bool_gate_pair(flag: bool, lhs: bool, rhs: bool) -> bool {
+    and(flag, or(lhs, rhs))
+}
+
+fn bool_choose_chain(first_gate: bool, second_gate: bool, first: bool, second: bool, third: bool) -> bool {
+    select3_bool(first_gate, second_gate, first, second, third)
+}
+
+fn stabilized_bool(flag: bool, value: bool) -> bool {
+    choose_bool(flag, value, not(value))
+}

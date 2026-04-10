@@ -1,0 +1,13 @@
+# EXPECT-ERROR: duplicate declaration for `helper`
+circuit duplicate_function {
+    fn helper(value: field) -> field {
+        value
+    }
+
+    fn helper(value: field) -> field {
+        value + 1
+    }
+
+    public x: field;
+    expose x;
+}

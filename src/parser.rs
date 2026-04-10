@@ -1,8 +1,8 @@
 use std::mem;
 
 use crate::ast::{
-    BinaryOp, Circuit, ConstrainStmt, ExposeStmt, Expr, InputDecl, Item, LetStmt, Program,
-    Statement, Type, UnaryOp, Visibility,
+    BinaryOp, Circuit, ConstrainStmt, ExposeStmt, Expr, FunctionDecl, ImportDecl, IncludeDecl,
+    InputDecl, Item, LetStmt, Param, Program, Statement, Type, UnaryOp, Visibility,
 };
 use crate::error::{CompileError, CompileResult};
 use crate::lexer::{Token, TokenKind, lex};
@@ -11,6 +11,11 @@ use crate::span::Span;
 pub fn parse(source: &str) -> CompileResult<Program> {
     let tokens = lex(source)?;
     Parser::new(tokens).parse_program()
+}
+
+pub fn parse_items(source: &str) -> CompileResult<Vec<Item>> {
+    let tokens = lex(source)?;
+    Parser::new(tokens).parse_item_list()
 }
 
 struct Parser {
@@ -28,20 +33,82 @@ impl Parser {
         let name = self.expect_ident("expected circuit name")?;
         self.expect_simple(TokenKind::LBrace, "expected `{` after circuit name")?;
 
-        let mut items = Vec::new();
-        while !self.check(&TokenKind::RBrace) {
-            if self.check(&TokenKind::Public) || self.check(&TokenKind::Private) {
-                items.push(Item::Input(self.parse_input_decl()?));
-            } else {
-                items.push(Item::Statement(self.parse_statement()?));
-            }
-        }
+        let items = self.parse_until(TokenKind::RBrace)?;
 
         self.expect_simple(TokenKind::RBrace, "expected `}` at end of circuit body")?;
         self.expect_simple(TokenKind::Eof, "expected end of file")?;
 
         Ok(Program {
             circuit: Circuit { name, items },
+        })
+    }
+
+    fn parse_item_list(&mut self) -> CompileResult<Vec<Item>> {
+        let items = self.parse_until(TokenKind::Eof)?;
+        self.expect_simple(TokenKind::Eof, "expected end of file")?;
+        Ok(items)
+    }
+
+    fn parse_until(&mut self, terminal: TokenKind) -> CompileResult<Vec<Item>> {
+        let mut items = Vec::new();
+        while !self.check(&terminal) {
+            items.push(self.parse_item()?);
+        }
+        Ok(items)
+    }
+
+    fn parse_item(&mut self) -> CompileResult<Item> {
+        if self.check(&TokenKind::Include) {
+            Ok(Item::Include(self.parse_include_decl()?))
+        } else if self.check(&TokenKind::Import) {
+            Ok(Item::Import(self.parse_import_decl()?))
+        } else if self.check(&TokenKind::Public) || self.check(&TokenKind::Private) {
+            Ok(Item::Input(self.parse_input_decl()?))
+        } else if self.check(&TokenKind::Fn) {
+            Ok(Item::Function(self.parse_function_decl()?))
+        } else {
+            Ok(Item::Statement(self.parse_statement()?))
+        }
+    }
+
+    fn parse_include_decl(&mut self) -> CompileResult<IncludeDecl> {
+        let start = self.expect_simple(TokenKind::Include, "expected `include`")?;
+        let token = self.advance().clone();
+        let path = match token.kind {
+            TokenKind::String(path) => path,
+            _ => {
+                return Err(CompileError::new(
+                    token.span,
+                    "expected string literal after `include`",
+                ));
+            }
+        };
+        self.expect_simple(TokenKind::Semicolon, "expected `;` after include path")?;
+        Ok(IncludeDecl { path, span: start })
+    }
+
+    fn parse_import_decl(&mut self) -> CompileResult<ImportDecl> {
+        let start = self.expect_simple(TokenKind::Import, "expected `import`")?;
+        let token = self.advance().clone();
+        let path = match token.kind {
+            TokenKind::String(path) => path,
+            _ => {
+                return Err(CompileError::new(
+                    token.span,
+                    "expected string literal after `import`",
+                ));
+            }
+        };
+        self.expect_simple(TokenKind::As, "expected `as` after import path")?;
+        let alias = self.expect_ident("expected import alias after `as`")?;
+        self.expect_simple(
+            TokenKind::Semicolon,
+            "expected `;` after import declaration",
+        )?;
+        Ok(ImportDecl {
+            path,
+            alias,
+            span: start,
         })
     }
 
@@ -60,14 +127,57 @@ impl Parser {
 
         let name = self.expect_ident("expected input name")?;
         self.expect_simple(TokenKind::Colon, "expected `:` after input name")?;
-        self.expect_simple(TokenKind::Field, "expected `field` type")?;
+        let ty = self.parse_type()?;
         self.expect_simple(TokenKind::Semicolon, "expected `;` after input declaration")?;
 
         Ok(InputDecl {
             visibility,
             name,
-            ty: Type::Field,
+            ty,
             span: visibility_token.span,
+        })
+    }
+
+    fn parse_function_decl(&mut self) -> CompileResult<FunctionDecl> {
+        let start = self.expect_simple(TokenKind::Fn, "expected `fn`")?;
+        let name = self.expect_ident("expected function name after `fn`")?;
+        self.expect_simple(TokenKind::LParen, "expected `(` after function name")?;
+
+        let mut params = Vec::new();
+        if !self.check(&TokenKind::RParen) {
+            loop {
+                let param_span = self.peek().span;
+                let param_name = self.expect_ident("expected parameter name")?;
+                self.expect_simple(TokenKind::Colon, "expected `:` after parameter name")?;
+                let param_ty = self.parse_type()?;
+                params.push(Param {
+                    name: param_name,
+                    ty: param_ty,
+                    span: param_span,
+                });
+
+                if self.check(&TokenKind::Comma) {
+                    self.advance();
+                    continue;
+                }
+
+                break;
+            }
+        }
+
+        self.expect_simple(TokenKind::RParen, "expected `)` after parameter list")?;
+        self.expect_simple(TokenKind::Arrow, "expected `->` after parameter list")?;
+        let return_type = self.parse_type()?;
+        self.expect_simple(TokenKind::LBrace, "expected `{` before function body")?;
+        let body = self.parse_expr()?;
+        self.expect_simple(TokenKind::RBrace, "expected `}` after function body")?;
+
+        Ok(FunctionDecl {
+            name,
+            params,
+            return_type,
+            body,
+            span: start,
         })
     }
 
@@ -202,10 +312,46 @@ impl Parser {
                 value,
                 span: token.span,
             }),
-            TokenKind::Ident(name) => Ok(Expr::Ident {
-                name,
+            TokenKind::True => Ok(Expr::Bool {
+                value: true,
                 span: token.span,
             }),
+            TokenKind::False => Ok(Expr::Bool {
+                value: false,
+                span: token.span,
+            }),
+            TokenKind::Ident(name) => {
+                if self.check(&TokenKind::LParen) || self.check(&TokenKind::ColonColon) {
+                    let callee = self.parse_call_target(name)?;
+                    let args = self.parse_call_args()?;
+                    Ok(Expr::Call {
+                        callee,
+                        args,
+                        span: token.span,
+                    })
+                } else {
+                    Ok(Expr::Ident {
+                        name,
+                        span: token.span,
+                    })
+                }
+            }
+            TokenKind::If => {
+                let condition = self.parse_expr()?;
+                self.expect_simple(TokenKind::LBrace, "expected `{` before `if` branch")?;
+                let then_branch = self.parse_expr()?;
+                self.expect_simple(TokenKind::RBrace, "expected `}` after `if` branch")?;
+                self.expect_simple(TokenKind::Else, "expected `else` after `if` branch")?;
+                self.expect_simple(TokenKind::LBrace, "expected `{` before `else` branch")?;
+                let else_branch = self.parse_expr()?;
+                self.expect_simple(TokenKind::RBrace, "expected `}` after `else` branch")?;
+                Ok(Expr::IfElse {
+                    condition: Box::new(condition),
+                    then_branch: Box::new(then_branch),
+                    else_branch: Box::new(else_branch),
+                    span: token.span,
+                })
+            }
             TokenKind::LParen => {
                 let expr = self.parse_expr()?;
                 self.expect_simple(TokenKind::RParen, "expected `)` after expression")?;
@@ -233,6 +379,53 @@ impl Parser {
 
     fn check(&self, expected: &TokenKind) -> bool {
         mem::discriminant(&self.peek().kind) == mem::discriminant(expected)
+    }
+
+    fn parse_type(&mut self) -> CompileResult<Type> {
+        if self.check(&TokenKind::Field) {
+            self.advance();
+            Ok(Type::Field)
+        } else if self.check(&TokenKind::Bool) {
+            self.advance();
+            Ok(Type::Bool)
+        } else {
+            Err(CompileError::new(
+                self.peek().span,
+                "expected `field` or `bool` type",
+            ))
+        }
+    }
+
+    fn parse_call_target(&mut self, first: String) -> CompileResult<Vec<String>> {
+        let mut segments = vec![first];
+        while self.check(&TokenKind::ColonColon) {
+            self.advance();
+            segments.push(self.expect_ident("expected identifier after `::`")?);
+        }
+        if !self.check(&TokenKind::LParen) {
+            return Err(CompileError::new(
+                self.peek().span,
+                "qualified identifiers are only supported in call position",
+            ));
+        }
+        self.advance();
+        Ok(segments)
+    }
+
+    fn parse_call_args(&mut self) -> CompileResult<Vec<Expr>> {
+        let mut args = Vec::new();
+        if !self.check(&TokenKind::RParen) {
+            loop {
+                args.push(self.parse_expr()?);
+                if self.check(&TokenKind::Comma) {
+                    self.advance();
+                    continue;
+                }
+                break;
+            }
+        }
+        self.expect_simple(TokenKind::RParen, "expected `)` after argument list")?;
+        Ok(args)
     }
 
     fn peek(&self) -> &Token {

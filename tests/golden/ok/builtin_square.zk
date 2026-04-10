@@ -1,0 +1,10 @@
+# RUN: --public expected=16 --private x=4
+# EXPECT-OUTPUT: result=16
+circuit builtin_square {
+    public expected: field;
+    private x: field;
+
+    let result = square(x);
+    constrain result == expected;
+    expose result;
+}

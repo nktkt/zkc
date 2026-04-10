@@ -1,0 +1,5 @@
+import "@std/select/field.zk" as select;
+
+fn score(value: field, gate: bool) -> field {
+    select::select_bias_field(gate, value, 4, 1)
+}

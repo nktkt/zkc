@@ -1,0 +1,16 @@
+circuit functions_demo {
+    fn sqr(value: field) -> field {
+        value * value
+    }
+
+    fn transform(value: field, offset: field) -> field {
+        sqr(value) + offset
+    }
+
+    public expected: field;
+    private x: field;
+
+    let result = transform(x, 7);
+    constrain result == expected;
+    expose result;
+}

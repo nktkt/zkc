@@ -1,0 +1,13 @@
+circuit weighted_sum {
+    public expected: field;
+    private a: field;
+    private b: field;
+    private c: field;
+
+    let left = a * 3;
+    let middle = b * 5;
+    let right = c * 8;
+    let total = left + middle + right;
+    constrain total == expected;
+    expose total;
+}

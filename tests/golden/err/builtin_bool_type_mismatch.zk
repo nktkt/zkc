@@ -1,0 +1,7 @@
+# EXPECT-ERROR: function `and` expects argument 2 to have type `bool` but got `field`
+circuit builtin_bool_type_mismatch {
+    public gate: bool;
+    public x: field;
+    let result = and(gate, x);
+    expose result;
+}

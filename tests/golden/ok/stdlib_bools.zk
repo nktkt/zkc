@@ -1,0 +1,15 @@
+# RUN: --public expected=false --public primary=true --private a=true --private b=false
+# EXPECT-OUTPUT: result=0
+circuit stdlib_bools {
+    include "@std/select/bool.zk";
+
+    public expected: bool;
+    public primary: bool;
+    private a: bool;
+    private b: bool;
+
+    let routed = bool_choose_chain(primary, false, a, b, true);
+    let result = parity3_bool(routed, a, b);
+    constrain result == expected;
+    expose result;
+}

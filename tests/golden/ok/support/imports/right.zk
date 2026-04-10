@@ -1,0 +1,5 @@
+import "@std/arith/scaling.zk" as arith;
+
+fn score(value: field, gate: bool) -> field {
+    if gate { arith::scale3(value) } else { arith::scale2(value) }
+}

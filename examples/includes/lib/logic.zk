@@ -1,0 +1,9 @@
+include "../shared/bools.zk";
+
+fn adjusted(value: field) -> field {
+    value + 2
+}
+
+fn choose_bonus(flag: bool, left: field, right: field) -> field {
+    if invert(invert(flag)) { left } else { right }
+}

@@ -1,0 +1,9 @@
+circuit optimize_demo {
+    public x: field;
+
+    let a = x + 0;
+    let b = a * 1;
+    let c = b * 0;
+    expose a;
+    expose c;
+}

@@ -1,0 +1,12 @@
+# RUN: --public expected=35 --private a=2 --private b=5 --private c=3
+# EXPECT-OUTPUT: result=35
+circuit builtin_weighted {
+    public expected: field;
+    private a: field;
+    private b: field;
+    private c: field;
+
+    let result = weighted_sum3(a, 3, b, 4, c, 3);
+    constrain result == expected;
+    expose result;
+}

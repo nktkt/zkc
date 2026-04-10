@@ -1,0 +1,6 @@
+# EXPECT-ERROR: expected `)` after argument list
+circuit syntax_missing_paren {
+    public x: field;
+    let y = sum2(x, 1;
+    expose y;
+}

@@ -1,0 +1,16 @@
+# RUN: --public expected=24 --public primary=true --public secondary=true --private x=2 --private y=3 --private z=4
+# EXPECT-OUTPUT: result=24
+circuit stdlib_pipeline {
+    include "@std/patterns/pipeline.zk";
+
+    public expected: field;
+    public primary: bool;
+    public secondary: bool;
+    private x: field;
+    private y: field;
+    private z: field;
+
+    let result = pipeline_route(primary, secondary, x, y, z);
+    constrain result == expected;
+    expose result;
+}

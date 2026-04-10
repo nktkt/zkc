@@ -13,8 +13,24 @@ pub struct Circuit {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Item {
+    Include(IncludeDecl),
+    Import(ImportDecl),
     Input(InputDecl),
+    Function(FunctionDecl),
     Statement(Statement),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncludeDecl {
+    pub path: String,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportDecl {
+    pub path: String,
+    pub alias: String,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,9 +47,35 @@ pub enum Visibility {
     Private,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionDecl {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Type,
+    pub body: Expr,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Param {
+    pub name: String,
+    pub ty: Type,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
     Field,
+    Bool,
+}
+
+impl Type {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Field => "field",
+            Self::Bool => "bool",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,8 +112,17 @@ pub enum Expr {
         value: i128,
         span: Span,
     },
+    Bool {
+        value: bool,
+        span: Span,
+    },
     Ident {
         name: String,
+        span: Span,
+    },
+    Call {
+        callee: Vec<String>,
+        args: Vec<Expr>,
         span: Span,
     },
     Unary {
@@ -85,17 +136,30 @@ pub enum Expr {
         rhs: Box<Expr>,
         span: Span,
     },
+    IfElse {
+        condition: Box<Expr>,
+        then_branch: Box<Expr>,
+        else_branch: Box<Expr>,
+        span: Span,
+    },
 }
 
 impl Expr {
     pub fn span(&self) -> Span {
         match self {
             Self::Number { span, .. }
+            | Self::Bool { span, .. }
             | Self::Ident { span, .. }
+            | Self::Call { span, .. }
             | Self::Unary { span, .. }
-            | Self::Binary { span, .. } => *span,
+            | Self::Binary { span, .. }
+            | Self::IfElse { span, .. } => *span,
         }
     }
+}
+
+pub fn format_callee(path: &[String]) -> String {
+    path.join("::")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

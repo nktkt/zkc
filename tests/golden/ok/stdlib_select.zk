@@ -1,0 +1,13 @@
+# RUN: --public expected=13 --public gate=true --private value=9
+# EXPECT-OUTPUT: result=13
+circuit stdlib_select {
+    include "@std/select/field.zk";
+
+    public expected: field;
+    public gate: bool;
+    private value: field;
+
+    let result = select_bias_field(gate, value, 4, 1);
+    constrain result == expected;
+    expose result;
+}

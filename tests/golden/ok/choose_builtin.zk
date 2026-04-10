@@ -1,0 +1,12 @@
+# RUN: --public expected=17 --public gate=true --private x=17 --private y=30
+# EXPECT-OUTPUT: result=17
+circuit choose_builtin {
+    public expected: field;
+    public gate: bool;
+    private x: field;
+    private y: field;
+
+    let result = choose(gate, x, y);
+    constrain result == expected;
+    expose result;
+}

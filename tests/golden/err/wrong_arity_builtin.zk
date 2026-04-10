@@ -1,0 +1,7 @@
+# EXPECT-ERROR: function `sum3` expects 3 arguments but got 2
+circuit wrong_arity_builtin {
+    public x: field;
+    public y: field;
+    let z = sum3(x, y);
+    expose z;
+}

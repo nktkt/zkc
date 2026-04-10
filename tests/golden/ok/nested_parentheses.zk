@@ -1,0 +1,11 @@
+# RUN: --public expected=42 --private x=4 --private y=3
+# EXPECT-OUTPUT: result=42
+circuit nested_parentheses {
+    public expected: field;
+    private x: field;
+    private y: field;
+
+    let result = (x + y) * (x + 2);
+    constrain result == expected;
+    expose result;
+}

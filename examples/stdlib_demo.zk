@@ -1,0 +1,14 @@
+circuit stdlib_demo {
+    include "@std/patterns/pipeline.zk";
+
+    public expected: field;
+    public primary: bool;
+    public secondary: bool;
+    private x: field;
+    private y: field;
+    private z: field;
+
+    let result = pipeline_route(primary, secondary, x, y, z);
+    constrain result == expected;
+    expose result;
+}

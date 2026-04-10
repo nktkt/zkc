@@ -1,0 +1,35 @@
+fn const_zero() -> field {
+    0
+}
+
+fn const_one() -> field {
+    1
+}
+
+fn const_two() -> field {
+    2
+}
+
+fn const_three() -> field {
+    3
+}
+
+fn const_four() -> field {
+    4
+}
+
+fn const_five() -> field {
+    5
+}
+
+fn const_ten() -> field {
+    10
+}
+
+fn const_true() -> bool {
+    true
+}
+
+fn const_false() -> bool {
+    false
+}

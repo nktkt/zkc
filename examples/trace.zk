@@ -1,0 +1,13 @@
+circuit trace_demo {
+    public expected: field;
+    private a: field;
+    private b: field;
+
+    let product = a * b;
+    let shifted = product + 9;
+    let balance = shifted - a;
+
+    constrain balance == expected;
+    expose product;
+    expose balance;
+}

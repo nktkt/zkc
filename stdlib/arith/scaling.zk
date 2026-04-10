@@ -1,0 +1,37 @@
+include "@std/arith/constants.zk";
+
+fn scale2(value: field) -> field {
+    value + value
+}
+
+fn scale3(value: field) -> field {
+    scale2(value) + value
+}
+
+fn scale4(value: field) -> field {
+    scale2(scale2(value))
+}
+
+fn scale5(value: field) -> field {
+    scale4(value) + value
+}
+
+fn scale10(value: field) -> field {
+    scale5(value) + scale5(value)
+}
+
+fn increment(value: field) -> field {
+    value + const_one()
+}
+
+fn decrement(value: field) -> field {
+    value - const_one()
+}
+
+fn shift_by_five(value: field) -> field {
+    value + const_five()
+}
+
+fn scale_and_shift(value: field, factor: field, offset: field) -> field {
+    value * factor + offset
+}

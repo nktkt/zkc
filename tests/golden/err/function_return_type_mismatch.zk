@@ -1,0 +1,10 @@
+# EXPECT-ERROR: function `bad` declares return type `bool` but body has type `field`
+circuit function_return_type_mismatch {
+    fn bad(value: field) -> bool {
+        value + 1
+    }
+
+    public x: field;
+    let y = bad(x);
+    expose y;
+}

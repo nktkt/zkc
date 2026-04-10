@@ -1,0 +1,6 @@
+# EXPECT-ERROR: expects `field` operands
+circuit arithmetic_on_bool {
+    public gate: bool;
+    let result = gate + 1;
+    expose result;
+}

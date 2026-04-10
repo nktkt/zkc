@@ -1,0 +1,6 @@
+# EXPECT-ERROR: undeclared identifier `missing`
+circuit unknown_identifier {
+    public x: field;
+    let y = x + missing;
+    expose y;
+}

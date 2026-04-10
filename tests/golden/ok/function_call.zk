@@ -1,0 +1,14 @@
+# RUN: --public expected=30 --private x=5
+# EXPECT-OUTPUT: result=30
+circuit function_call {
+    fn sqr(value: field) -> field {
+        value * value
+    }
+
+    public expected: field;
+    private x: field;
+
+    let result = sqr(x) + 5;
+    constrain result == expected;
+    expose result;
+}

@@ -1,0 +1,10 @@
+# RUN: --public expected=2 --private x=5
+# EXPECT-OUTPUT: result=2
+circuit negative_literals {
+    public expected: field;
+    private x: field;
+
+    let result = x + (-3);
+    constrain result == expected;
+    expose result;
+}

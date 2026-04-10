@@ -1,0 +1,6 @@
+# EXPECT-ERROR: undeclared function `unknown`
+circuit unknown_function {
+    public x: field;
+    let y = unknown(x);
+    expose y;
+}

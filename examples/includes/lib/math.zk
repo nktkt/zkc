@@ -1,0 +1,9 @@
+include "../shared/offsets.zk";
+
+fn sqr(value: field) -> field {
+    value * value
+}
+
+fn shifted_square(value: field) -> field {
+    sqr(value) + unit_offset()
+}

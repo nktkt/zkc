@@ -1,0 +1,10 @@
+# EXPECT-ERROR: function `dbl` expects 1 arguments but got 2
+circuit wrong_arity_user_function {
+    fn dbl(value: field) -> field {
+        value + value
+    }
+
+    public x: field;
+    let y = dbl(x, 1);
+    expose y;
+}

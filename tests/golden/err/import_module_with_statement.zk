@@ -1,0 +1,7 @@
+# EXPECT-ERROR: imported modules may only contain functions
+circuit import_module_with_statement {
+    import "support/imports/bad_statement.zk" as broken;
+
+    public x: field;
+    expose x;
+}

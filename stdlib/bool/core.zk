@@ -1,0 +1,31 @@
+fn bool_identity(value: bool) -> bool {
+    value
+}
+
+fn bool_nand(lhs: bool, rhs: bool) -> bool {
+    not(and(lhs, rhs))
+}
+
+fn bool_nor(lhs: bool, rhs: bool) -> bool {
+    not(or(lhs, rhs))
+}
+
+fn bool_xnor(lhs: bool, rhs: bool) -> bool {
+    not(xor(lhs, rhs))
+}
+
+fn bool_implies(lhs: bool, rhs: bool) -> bool {
+    or(not(lhs), rhs)
+}
+
+fn bool_select_field(flag: bool, when_true: field, when_false: field) -> field {
+    choose(flag, when_true, when_false)
+}
+
+fn bool_select_bool(flag: bool, when_true: bool, when_false: bool) -> bool {
+    choose_bool(flag, when_true, when_false)
+}
+
+fn bool_guard(flag: bool) -> field {
+    if flag { 1 } else { 0 }
+}

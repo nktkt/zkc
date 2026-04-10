@@ -1,0 +1,34 @@
+include "@std/arith/constants.zk";
+include "@std/arith/scaling.zk";
+
+fn square_plus(value: field, offset: field) -> field {
+    square(value) + offset
+}
+
+fn cube_plus(value: field, offset: field) -> field {
+    cube(value) + offset
+}
+
+fn horner2(value: field, a: field, b: field, c: field) -> field {
+    (a * value + b) * value + c
+}
+
+fn horner3(value: field, a: field, b: field, c: field, d: field) -> field {
+    ((a * value + b) * value + c) * value + d
+}
+
+fn quartic_seed(value: field) -> field {
+    horner3(value, const_one(), const_two(), const_three(), const_four()) + square_plus(value, const_one())
+}
+
+fn centered_square(value: field, bias: field) -> field {
+    square(value - bias)
+}
+
+fn scaled_cubic(value: field, scale: field, offset: field) -> field {
+    cube(value) * scale + offset
+}
+
+fn affine_square(value: field, scale: field, offset: field) -> field {
+    square(scale_and_shift(value, scale, offset))
+}

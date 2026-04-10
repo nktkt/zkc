@@ -1,0 +1,11 @@
+circuit booleans_demo {
+    public expected: field;
+    public gate: bool;
+    private x: field;
+    private y: field;
+
+    let selected = if gate { x + 5 } else { y + 1 };
+    constrain selected == expected;
+    expose selected;
+    expose gate as gate_value;
+}

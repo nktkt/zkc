@@ -1,0 +1,18 @@
+# RUN: --public expected=19 --private x=4
+# EXPECT-OUTPUT: result=19
+circuit function_chain {
+    fn dbl(value: field) -> field {
+        value + value
+    }
+
+    fn adjust(value: field) -> field {
+        dbl(value) + 11
+    }
+
+    public expected: field;
+    private x: field;
+
+    let result = adjust(x);
+    constrain result == expected;
+    expose result;
+}
