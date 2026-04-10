@@ -1,33 +1,41 @@
 # zkc
 
-`zkc` is a small zero-knowledge-oriented language and compiler written from scratch in Rust.
+`zkc` stands for `Zero-Knowledge Compiler`.
 
-It is designed as a minimal foundation for a proving DSL: the language supports public and private
-field inputs, arithmetic expressions, equality constraints, and exposed outputs. The current
-implementation compiles source programs into a simple arithmetic-circuit IR and can execute witness
-assignments locally to check whether all constraints are satisfied.
+It is a small zero-knowledge-oriented language and compiler written from scratch in Rust. The
+current project is intentionally narrow: it focuses on a tiny arithmetic DSL with public inputs,
+private inputs, expressions over a finite field, equality constraints, and named public outputs.
+
+Today, `zkc` is best viewed as a compact compiler prototype for ZK language and circuit design. It
+parses source code, performs basic validation, lowers programs into a wire-based arithmetic circuit
+IR, and evaluates witness assignments locally to check whether the constraint system is satisfied.
 
 ## Status
 
-This project is currently experimental.
+This repository is experimental.
 
-It is useful as:
+What it is:
 
-- a compact reference implementation of a tiny ZK DSL
-- a starting point for adding a real proving backend
-- a base for experimenting with language design, circuit IR, and witness evaluation
+- a tiny reference implementation of a ZK-oriented DSL
+- a clean starting point for adding a real proving backend
+- a playground for compiler passes, circuit IR design, and witness evaluation
 
-It is not yet suitable for production use because it does not generate proofs or verification keys.
+What it is not yet:
 
-## Features
+- a prover
+- a verifier
+- a production-ready language runtime
+
+## Current Capabilities
 
 - `public` and `private` field inputs
-- `let` bindings over arithmetic expressions
+- arithmetic expressions with `+`, `-`, `*`, and parentheses
+- `let` bindings
 - `constrain lhs == rhs;` equality constraints
 - `expose expr;` and `expose expr as name;` public outputs
 - constant folding for literal-only expressions
-- lowering into a wire-based arithmetic circuit IR
-- witness execution and constraint checking from the CLI
+- lowering into a simple arithmetic circuit IR
+- local witness execution and constraint checking from the CLI
 
 ## Quick Start
 
@@ -42,19 +50,19 @@ It is not yet suitable for production use because it does not generate proofs or
 cargo build
 ```
 
-### Run tests
+### Test
 
 ```bash
 cargo test
 ```
 
-### Compile an example circuit
+### Compile a circuit
 
 ```bash
 cargo run -- compile examples/product.zk
 ```
 
-### Run the circuit with inputs
+### Run a circuit with witness values
 
 ```bash
 cargo run -- run examples/product.zk --public x=5 --private y=7
@@ -68,7 +76,7 @@ product = 35
 shifted_value = 38
 ```
 
-## Example Program
+## Example
 
 ```zk
 circuit product_check {
@@ -83,9 +91,7 @@ circuit product_check {
 }
 ```
 
-## Language Overview
-
-### Grammar
+## Language Sketch
 
 ```text
 program        := "circuit" IDENT "{" item* "}"
@@ -104,49 +110,50 @@ primary        := NUMBER | IDENT | "(" expr ")"
 ### Semantics
 
 - All values live in the prime field with modulus `18446744073709551557`.
-- Expressions currently support `+`, `-`, `*`, parentheses, identifiers, and integer literals.
-- Public and private inputs are mapped to wires in the lowered circuit.
-- Each `constrain` statement becomes an equality check over lowered operands.
-- Each `expose` statement becomes a named public output.
+- Public and private inputs are assigned to wires in the lowered circuit.
+- `let` bindings name intermediate expressions.
+- `constrain` emits equality checks over lowered operands.
+- `expose` emits named public outputs.
 
-## CLI
-
-```text
-zkc compile <file.zk>
-zkc run <file.zk> [--public name=value]... [--private name=value]...
-```
-
-## Repository Layout
+## Compiler Pipeline
 
 ```text
-src/main.rs       CLI entrypoint
-src/parser.rs     Parser
-src/lexer.rs      Lexer
-src/typecheck.rs  Name resolution and basic validation
-src/ir.rs         Arithmetic circuit IR and lowering
-src/eval.rs       Witness execution and constraint checking
-examples/         Example circuits
+source
+  -> lexer
+  -> parser
+  -> basic validation
+  -> arithmetic circuit IR
+  -> witness execution / constraint checking
 ```
 
-## Current Limitations
+Key files:
 
-- No proof generation
-- No verification backend
-- Only one data type: `field`
-- No functions, modules, arrays, structs, or control flow
-- No package manager or standard library
-- No optimization pipeline beyond simple constant folding
+- `src/main.rs`: CLI entrypoint
+- `src/lexer.rs`: lexer
+- `src/parser.rs`: parser
+- `src/typecheck.rs`: name resolution and basic validation
+- `src/ir.rs`: arithmetic circuit IR and lowering
+- `src/eval.rs`: witness execution and constraint checking
+
+## Limitations
+
+- no proof generation
+- no verification backend
+- only one data type: `field`
+- no functions, modules, arrays, structs, or control flow
+- no package manager or standard library
+- no optimization pipeline beyond simple constant folding
 
 ## Development Direction
 
-The natural next steps are:
+The next major steps are:
 
 - introduce a typed intermediate representation
 - add richer types and structured language features
-- target a real backend such as `R1CS`, `AIR`, or `PLONKish` constraints
+- target a real backend such as `R1CS`, `AIR`, or `PLONKish`
 - implement `keygen`, `prove`, and `verify`
-- add better diagnostics, fuzzing, benchmarks, and compatibility tests
+- improve diagnostics, fuzzing, benchmarks, and compatibility tests
 
 ## License
 
-No license file has been added yet.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
