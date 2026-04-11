@@ -30,6 +30,10 @@ expanded by the compiler during typechecking.
 - `xor(lhs, rhs)` returns the boolean exclusive-or of `lhs` and `rhs`
 - `choose(cond, when_true, when_false)` returns one of two `field` values based on a `bool`
 - `choose_bool(cond, when_true, when_false)` returns one of two `bool` values based on a `bool`
+- `into_u8(value)` range-checks a `field` value and reinterprets it as `u8`
+- `into_u16(value)` range-checks a `field` value and reinterprets it as `u16`
+- `into_u32(value)` range-checks a `field` value and reinterprets it as `u32`
+- `into_field(value)` reinterprets `bool` and unsigned integer values as `field`
 
 ## Example
 

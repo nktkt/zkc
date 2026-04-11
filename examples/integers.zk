@@ -1,0 +1,12 @@
+circuit integers_demo {
+    public expected: u8;
+    private raw: field;
+
+    let base = into_u8(raw);
+    let bumped = base + 1;
+    let mixed = bumped * 2 - 3;
+
+    constrain mixed == expected;
+    expose mixed;
+    expose into_field(mixed) as mixed_field;
+}

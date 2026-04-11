@@ -22,9 +22,10 @@ A `zkc` program defines exactly one circuit. A circuit consists of:
 - equality constraints
 - public outputs
 
-`field` values live in a single prime field with modulus `18446744073709551557`.
+`field` values live in the BN254 scalar field with modulus `21888242871839275222246405745257275088548364400416034343698204186575808495617`.
 
 `bool` values are represented in the lowered circuit as field elements constrained to `0` or `1`.
+`u8`, `u16`, and `u32` values are represented as field elements plus explicit range assertions.
 
 ## Syntax
 
@@ -37,7 +38,7 @@ input_decl     := ("public" | "private") IDENT ":" type ";"
 function_decl  := "fn" IDENT "(" params? ")" "->" type "{" expr "}"
 params         := param ("," param)*
 param          := IDENT ":" type
-type           := "field" | "bool"
+type           := "field" | "bool" | "u8" | "u16" | "u32"
 stmt           := let_stmt | constrain_stmt | expose_stmt
 let_stmt       := "let" IDENT "=" expr ";"
 constrain_stmt := "constrain" expr "==" expr ";"
@@ -75,15 +76,19 @@ String literals are currently only supported for `include` and `import` paths.
 
 ## Types
 
-Version 0 defines two scalar types:
+Version 0 defines five scalar types:
 
 - `field`
 - `bool`
+- `u8`
+- `u16`
+- `u32`
 
 Type rules:
 
 - arithmetic operators require `field` operands and return `field`
 - boolean builtins require `bool` operands and return `bool`
+- unsigned integer values are range-checked scalars and support checked arithmetic with matching widths
 - `if` conditions require `bool`
 - both branches of an `if` expression must have the same type
 - `constrain lhs == rhs;` requires both sides to have the same type
@@ -131,7 +136,8 @@ The compiler lowers a program into a wire-based arithmetic circuit IR with:
 - named outputs
 
 Literal-only arithmetic expressions may be constant-folded during lowering. Boolean conditionals and
-builtins lower to arithmetic combinations over boolean selector values.
+builtins lower to arithmetic combinations over boolean selector values. Unsigned integer values add
+range assertions to the lowered program, including checked arithmetic results.
 
 ## Include Resolution
 
@@ -200,6 +206,7 @@ Version 0 does not define:
 - richer types such as arrays or structs
 - package manifests
 - typed module interfaces
+- mixed integer/field arithmetic without explicit conversion
 - loops or statement-level control flow
 - package management
 - optimization beyond basic constant folding

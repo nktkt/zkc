@@ -4,7 +4,7 @@ use std::fmt;
 use crate::error::{RuntimeError, RuntimeResult};
 use crate::eval::RuntimeInputs;
 use crate::field::FieldElement;
-use crate::ir::{CircuitIr, Constraint, OpKind, Operand, Output};
+use crate::ir::{CircuitIr, Constraint, OpKind, Operand, Output, RangeConstraint};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NamedValue {
@@ -42,6 +42,14 @@ pub struct ConstraintTrace {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RangeConstraintTrace {
+    pub index: usize,
+    pub value: ResolvedOperand,
+    pub ty: crate::ast::Type,
+    pub satisfied: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutputTrace {
     pub name: String,
     pub source: Operand,
@@ -52,12 +60,13 @@ pub struct OutputTrace {
 pub struct WitnessTrace {
     pub circuit: String,
     pub backend: &'static str,
-    pub field_modulus: u64,
+    pub field_modulus: &'static str,
     pub public_inputs: Vec<NamedValue>,
     pub private_inputs: Vec<NamedValue>,
     pub wires: Vec<WireValue>,
     pub operations: Vec<OperationTrace>,
     pub constraints: Vec<ConstraintTrace>,
+    pub range_constraints: Vec<RangeConstraintTrace>,
     pub outputs: Vec<OutputTrace>,
 }
 
@@ -94,6 +103,18 @@ pub fn trace_execution(ir: &CircuitIr, inputs: &RuntimeInputs) -> RuntimeResult<
         }
     }
 
+    let range_constraints = trace_range_constraints(&ir.range_constraints, &wires)?;
+    for constraint in &range_constraints {
+        if !constraint.satisfied {
+            return Err(RuntimeError::new(format!(
+                "range check failed at #{}: {} is not in {}",
+                constraint.index,
+                constraint.value.value,
+                constraint.ty.name()
+            )));
+        }
+    }
+
     let outputs = trace_outputs(&ir.outputs, &wires)?;
     let wires = wires
         .into_iter()
@@ -110,6 +131,7 @@ pub fn trace_execution(ir: &CircuitIr, inputs: &RuntimeInputs) -> RuntimeResult<
         wires,
         operations,
         constraints,
+        range_constraints,
         outputs,
     })
 }
@@ -121,7 +143,7 @@ impl WitnessTrace {
         out.push(',');
         push_field(&mut out, "backend", &json_string(self.backend));
         out.push(',');
-        push_field(&mut out, "field_modulus", &self.field_modulus.to_string());
+        push_field(&mut out, "field_modulus", &json_string(self.field_modulus));
         out.push(',');
         push_field(
             &mut out,
@@ -147,6 +169,12 @@ impl WitnessTrace {
             &mut out,
             "constraints",
             &json_array(&self.constraints, constraint_trace_json),
+        );
+        out.push(',');
+        push_field(
+            &mut out,
+            "range_constraints",
+            &json_array(&self.range_constraints, range_constraint_trace_json),
         );
         out.push(',');
         push_field(
@@ -204,6 +232,24 @@ impl fmt::Display for WitnessTrace {
                     constraint.lhs.value,
                     constraint.rhs.operand,
                     constraint.rhs.value,
+                    status
+                )?;
+            }
+        }
+
+        writeln!(f, "range constraints:")?;
+        if self.range_constraints.is_empty() {
+            writeln!(f, "  <none>")?;
+        } else {
+            for constraint in &self.range_constraints {
+                let status = if constraint.satisfied { "ok" } else { "failed" };
+                writeln!(
+                    f,
+                    "  #{}: {} ({}) in {} [{}]",
+                    constraint.index,
+                    constraint.value.operand,
+                    constraint.value.value,
+                    constraint.ty.name(),
                     status
                 )?;
             }
@@ -306,6 +352,25 @@ fn trace_outputs(outputs: &[Output], wires: &[FieldElement]) -> RuntimeResult<Ve
     Ok(traced)
 }
 
+fn trace_range_constraints(
+    constraints: &[RangeConstraint],
+    wires: &[FieldElement],
+) -> RuntimeResult<Vec<RangeConstraintTrace>> {
+    let mut traced = Vec::with_capacity(constraints.len());
+    for (index, constraint) in constraints.iter().enumerate() {
+        let value = resolve_operand(constraint.value, wires)?;
+        traced.push(RangeConstraintTrace {
+            index,
+            satisfied: value
+                .value
+                .fits_in_bits(constraint.ty.uint_bits().unwrap_or(0)),
+            value,
+            ty: constraint.ty,
+        });
+    }
+    Ok(traced)
+}
+
 fn resolve_operand(operand: Operand, wires: &[FieldElement]) -> RuntimeResult<ResolvedOperand> {
     Ok(ResolvedOperand {
         operand,
@@ -402,6 +467,23 @@ fn constraint_trace_json(constraint: &ConstraintTrace) -> String {
         constraint.index,
         resolved_operand_json(&constraint.lhs),
         resolved_operand_json(&constraint.rhs),
+        constraint.satisfied
+    )
+}
+
+fn range_constraint_trace_json(constraint: &RangeConstraintTrace) -> String {
+    format!(
+        concat!(
+            "{{",
+            "\"index\":{},",
+            "\"value\":{},",
+            "\"type\":{},",
+            "\"satisfied\":{}",
+            "}}"
+        ),
+        constraint.index,
+        resolved_operand_json(&constraint.value),
+        json_string(constraint.ty.name()),
         constraint.satisfied
     )
 }

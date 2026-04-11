@@ -120,6 +120,30 @@ const BUILTINS: &[BuiltinSpec] = &[
         signature: "choose_bool(cond: bool, when_true: bool, when_false: bool) -> bool",
         description: "Returns when_true if cond is true, otherwise when_false.",
     },
+    BuiltinSpec {
+        name: "into_u8",
+        arity: 1,
+        signature: "into_u8(value: field) -> u8",
+        description: "Range-checks a field expression and reinterprets it as u8.",
+    },
+    BuiltinSpec {
+        name: "into_u16",
+        arity: 1,
+        signature: "into_u16(value: field) -> u16",
+        description: "Range-checks a field expression and reinterprets it as u16.",
+    },
+    BuiltinSpec {
+        name: "into_u32",
+        arity: 1,
+        signature: "into_u32(value: field) -> u32",
+        description: "Range-checks a field expression and reinterprets it as u32.",
+    },
+    BuiltinSpec {
+        name: "into_field",
+        arity: 1,
+        signature: "into_field(value: scalar) -> field",
+        description: "Reinterprets bool and unsigned integer values as field elements.",
+    },
 ];
 
 pub fn all() -> &'static [BuiltinSpec] {
@@ -269,6 +293,24 @@ pub fn expand(name: &str, args: &[TypedExpr], span: Span) -> CompileResult<Typed
                 span,
             ))
         }
+        "into_u8" => {
+            expect_types(name, args, &[Type::Field], span)?;
+            Ok(cast(args[0].clone(), Type::U8, span))
+        }
+        "into_u16" => {
+            expect_types(name, args, &[Type::Field], span)?;
+            Ok(cast(args[0].clone(), Type::U16, span))
+        }
+        "into_u32" => {
+            expect_types(name, args, &[Type::Field], span)?;
+            Ok(cast(args[0].clone(), Type::U32, span))
+        }
+        "into_field" => match args[0].ty {
+            Type::Field => Ok(args[0].clone()),
+            Type::Bool | Type::U8 | Type::U16 | Type::U32 => {
+                Ok(cast(args[0].clone(), Type::Field, span))
+            }
+        },
         _ => Err(CompileError::new(
             span,
             format!("builtin expansion missing for `{name}`"),
@@ -392,4 +434,15 @@ fn select(
         ty,
         span,
     }
+}
+
+fn cast(expr: TypedExpr, target: Type, span: Span) -> TypedExpr {
+    TypedExpr::new(
+        ExprKind::Cast {
+            expr: Box::new(expr),
+            target,
+        },
+        target,
+        span,
+    )
 }

@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::ast::Program;
+use crate::constraint::{self, ConstraintIr};
 use crate::error::CompileResult;
 use crate::hir;
 use crate::ir::{CircuitIr, lower};
@@ -22,6 +23,16 @@ pub fn compile_source(source: &str) -> CompileResult<CircuitIr> {
 pub fn compile_path(path: impl AsRef<Path>) -> CompileResult<CircuitIr> {
     let program = parse_and_typecheck_path(path)?;
     lower(&program)
+}
+
+pub fn compile_constraints_source(source: &str) -> CompileResult<ConstraintIr> {
+    let ir = compile_source(source)?;
+    Ok(constraint::lower(&ir))
+}
+
+pub fn compile_constraints_path(path: impl AsRef<Path>) -> CompileResult<ConstraintIr> {
+    let ir = compile_path(path)?;
+    Ok(constraint::lower(&ir))
 }
 
 pub fn parse_and_typecheck(source: &str) -> CompileResult<hir::Program> {

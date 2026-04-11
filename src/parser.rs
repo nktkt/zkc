@@ -388,10 +388,26 @@ impl Parser {
         } else if self.check(&TokenKind::Bool) {
             self.advance();
             Ok(Type::Bool)
+        } else if let TokenKind::Ident(name) = &self.peek().kind {
+            let ty = match name.as_str() {
+                "u8" => Some(Type::U8),
+                "u16" => Some(Type::U16),
+                "u32" => Some(Type::U32),
+                _ => None,
+            };
+            if let Some(ty) = ty {
+                self.advance();
+                Ok(ty)
+            } else {
+                Err(CompileError::new(
+                    self.peek().span,
+                    "expected `field`, `bool`, `u8`, `u16`, or `u32` type",
+                ))
+            }
         } else {
             Err(CompileError::new(
                 self.peek().span,
-                "expected `field` or `bool` type",
+                "expected `field`, `bool`, `u8`, `u16`, or `u32` type",
             ))
         }
     }

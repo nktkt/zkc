@@ -108,6 +108,7 @@ impl Builder {
             Statement::Constrain(stmt) => {
                 let lhs = self.lower_expr(&stmt.lhs)?;
                 let rhs = self.lower_expr(&stmt.rhs)?;
+                let (lhs, rhs) = coerce_comparable_pair(lhs, rhs, stmt.span)?;
                 if lhs.ty != rhs.ty {
                     return Err(CompileError::new(
                         stmt.span,
@@ -186,6 +187,26 @@ impl Builder {
                         ),
                     ));
                 }
+                let typed_args = function
+                    .params
+                    .iter()
+                    .zip(typed_args.into_iter())
+                    .map(|(param, arg)| {
+                        let arg_ty = arg.ty;
+                        coerce_expr_to_type(arg, param.ty, *span).map_err(|_| {
+                            CompileError::new(
+                                *span,
+                                format!(
+                                    "function `{}` expects argument `{}` to have type `{}` but got `{}`",
+                                    callee_name,
+                                    param.name,
+                                    param.ty.name(),
+                                    arg_ty.name()
+                                ),
+                            )
+                        })
+                    })
+                    .collect::<CompileResult<Vec<_>>>()?;
                 for (param, arg) in function.params.iter().zip(&typed_args) {
                     if param.ty != arg.ty {
                         return Err(CompileError::new(
@@ -223,24 +244,16 @@ impl Builder {
             Expr::Binary { op, lhs, rhs, span } => {
                 let lhs = self.lower_expr_in_scope(lhs, scope)?;
                 let rhs = self.lower_expr_in_scope(rhs, scope)?;
-                if lhs.ty != Type::Field || rhs.ty != Type::Field {
-                    return Err(CompileError::new(
-                        *span,
-                        format!(
-                            "operator `{}` expects `field` operands, got `{}` and `{}`",
-                            op.mnemonic(),
-                            lhs.ty.name(),
-                            rhs.ty.name()
-                        ),
-                    ));
-                }
+                let (lhs, rhs) = coerce_arithmetic_pair(lhs, rhs, *op, *span)?;
+                let ty = lhs.ty;
 
-                Ok(hir::TypedExpr::field(
+                Ok(hir::TypedExpr::new(
                     hir::ExprKind::Binary {
                         op: *op,
                         lhs: Box::new(lhs),
                         rhs: Box::new(rhs),
                     },
+                    ty,
                     *span,
                 ))
             }
@@ -263,6 +276,22 @@ impl Builder {
 
                 let then_branch = self.lower_expr_in_scope(then_branch, scope)?;
                 let else_branch = self.lower_expr_in_scope(else_branch, scope)?;
+                let then_ty = then_branch.ty;
+                let else_ty = else_branch.ty;
+                let (then_branch, else_branch) =
+                    match coerce_comparable_pair(then_branch, else_branch, *span) {
+                        Ok(pair) => pair,
+                        Err(_) => {
+                            return Err(CompileError::new(
+                                *span,
+                                format!(
+                                    "`if` branches must have the same type, got `{}` and `{}`",
+                                    then_ty.name(),
+                                    else_ty.name()
+                                ),
+                            ));
+                        }
+                    };
                 if then_branch.ty != else_branch.ty {
                     return Err(CompileError::new(
                         *span,
@@ -311,18 +340,20 @@ impl Builder {
             .iter()
             .map(|param| self.bind_param(&mut local_scope, param))
             .collect::<CompileResult<Vec<_>>>()?;
-        let body = self.lower_expr_in_scope(&function.body, &local_scope)?;
-        if body.ty != function.return_type {
-            return Err(CompileError::new(
-                function.span,
-                format!(
-                    "function `{}` declares return type `{}` but body has type `{}`",
-                    function.name,
-                    function.return_type.name(),
-                    body.ty.name()
-                ),
-            ));
-        }
+        let raw_body = self.lower_expr_in_scope(&function.body, &local_scope)?;
+        let body_ty = raw_body.ty;
+        let body =
+            coerce_expr_to_type(raw_body, function.return_type, function.span).map_err(|_| {
+                CompileError::new(
+                    function.span,
+                    format!(
+                        "function `{}` declares return type `{}` but body has type `{}`",
+                        function.name,
+                        function.return_type.name(),
+                        body_ty.name()
+                    ),
+                )
+            })?;
 
         Ok(hir::FunctionDecl {
             name: function.name.clone(),
@@ -378,6 +409,116 @@ impl Builder {
     }
 }
 
+fn coerce_arithmetic_pair(
+    lhs: hir::TypedExpr,
+    rhs: hir::TypedExpr,
+    op: crate::ast::BinaryOp,
+    span: crate::span::Span,
+) -> CompileResult<(hir::TypedExpr, hir::TypedExpr)> {
+    let (lhs, rhs) = coerce_comparable_pair(lhs, rhs, span)?;
+    if lhs.ty == Type::Field || lhs.ty.is_uint() {
+        Ok((lhs, rhs))
+    } else {
+        Err(CompileError::new(
+            span,
+            format!(
+                "operator `{}` expects `field` operands or matching unsigned integers; convert integer values with `into_field(...)` first when mixing domains, got `{}` and `{}`",
+                op.mnemonic(),
+                lhs.ty.name(),
+                rhs.ty.name()
+            ),
+        ))
+    }
+}
+
+fn coerce_comparable_pair(
+    lhs: hir::TypedExpr,
+    rhs: hir::TypedExpr,
+    span: crate::span::Span,
+) -> CompileResult<(hir::TypedExpr, hir::TypedExpr)> {
+    if lhs.ty == rhs.ty {
+        return Ok((lhs, rhs));
+    }
+
+    if rhs.ty.is_uint()
+        && let Ok(lhs) = coerce_expr_to_type(lhs.clone(), rhs.ty, span)
+    {
+        return Ok((lhs, rhs));
+    }
+
+    if lhs.ty.is_uint()
+        && let Ok(rhs) = coerce_expr_to_type(rhs.clone(), lhs.ty, span)
+    {
+        return Ok((lhs, rhs));
+    }
+
+    Err(CompileError::new(
+        span,
+        format!(
+            "type mismatch between `{}` and `{}`",
+            lhs.ty.name(),
+            rhs.ty.name()
+        ),
+    ))
+}
+
+fn coerce_expr_to_type(
+    expr: hir::TypedExpr,
+    target: Type,
+    span: crate::span::Span,
+) -> CompileResult<hir::TypedExpr> {
+    if expr.ty == target {
+        return Ok(expr);
+    }
+
+    if target.is_uint()
+        && expr.ty == Type::Field
+        && let hir::ExprKind::Constant(value) = expr.kind
+    {
+        ensure_uint_literal_fits(value, target, span)?;
+        return Ok(hir::TypedExpr::new(
+            hir::ExprKind::Constant(value),
+            target,
+            expr.span,
+        ));
+    }
+
+    Err(CompileError::new(
+        span,
+        format!("cannot coerce `{}` to `{}`", expr.ty.name(), target.name()),
+    ))
+}
+
+fn ensure_uint_literal_fits(
+    value: i128,
+    target: Type,
+    span: crate::span::Span,
+) -> CompileResult<()> {
+    let bits = target.uint_bits().unwrap_or(0);
+    if value < 0 {
+        return Err(CompileError::new(
+            span,
+            format!(
+                "integer literal `{value}` cannot be represented as `{}`",
+                target.name()
+            ),
+        ));
+    }
+
+    let max = (1i128 << bits) - 1;
+    if value > max {
+        return Err(CompileError::new(
+            span,
+            format!(
+                "integer literal `{value}` cannot be represented as `{}`",
+                target.name()
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
 fn substitute_expr(
     expr: &hir::TypedExpr,
     substitutions: &HashMap<hir::BindingId, hir::TypedExpr>,
@@ -428,6 +569,13 @@ fn substitute_expr(
         hir::ExprKind::BoolXor { lhs, rhs } => hir::ExprKind::BoolXor {
             lhs: Box::new(substitute_expr(lhs, substitutions)?),
             rhs: Box::new(substitute_expr(rhs, substitutions)?),
+        },
+        hir::ExprKind::Cast {
+            expr: inner,
+            target,
+        } => hir::ExprKind::Cast {
+            expr: Box::new(substitute_expr(inner, substitutions)?),
+            target: *target,
         },
     };
 

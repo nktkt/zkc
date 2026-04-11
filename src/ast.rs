@@ -67,6 +67,9 @@ pub struct Param {
 pub enum Type {
     Field,
     Bool,
+    U8,
+    U16,
+    U32,
 }
 
 impl Type {
@@ -74,7 +77,23 @@ impl Type {
         match self {
             Self::Field => "field",
             Self::Bool => "bool",
+            Self::U8 => "u8",
+            Self::U16 => "u16",
+            Self::U32 => "u32",
         }
+    }
+
+    pub fn uint_bits(self) -> Option<u8> {
+        match self {
+            Self::U8 => Some(8),
+            Self::U16 => Some(16),
+            Self::U32 => Some(32),
+            Self::Field | Self::Bool => None,
+        }
+    }
+
+    pub fn is_uint(self) -> bool {
+        self.uint_bits().is_some()
     }
 }
 

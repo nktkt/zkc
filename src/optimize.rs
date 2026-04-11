@@ -1,7 +1,9 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::field::FieldElement;
-use crate::ir::{CircuitIr, Constraint, NamedInput, OpKind, Operand, Operation, Output, WireId};
+use crate::ir::{
+    CircuitIr, Constraint, NamedInput, OpKind, Operand, Operation, Output, RangeConstraint, WireId,
+};
 
 pub fn optimize(ir: &CircuitIr) -> CircuitIr {
     let mut replacements = HashMap::new();
@@ -42,13 +44,23 @@ pub fn optimize(ir: &CircuitIr) -> CircuitIr {
         })
         .collect::<Vec<_>>();
 
-    let live_ops = dead_code_eliminate(&simplified_ops, &constraints, &outputs);
-    compact_wires(ir, live_ops, constraints, outputs)
+    let range_constraints = ir
+        .range_constraints
+        .iter()
+        .map(|constraint| RangeConstraint {
+            value: rewrite_operand(constraint.value, &replacements),
+            ty: constraint.ty,
+        })
+        .collect::<Vec<_>>();
+
+    let live_ops = dead_code_eliminate(&simplified_ops, &constraints, &range_constraints, &outputs);
+    compact_wires(ir, live_ops, constraints, range_constraints, outputs)
 }
 
 fn dead_code_eliminate(
     operations: &[Operation],
     constraints: &[Constraint],
+    range_constraints: &[RangeConstraint],
     outputs: &[Output],
 ) -> Vec<Operation> {
     let mut needed = BTreeSet::new();
@@ -56,6 +68,9 @@ fn dead_code_eliminate(
     for constraint in constraints {
         mark_operand(constraint.lhs, &mut needed);
         mark_operand(constraint.rhs, &mut needed);
+    }
+    for constraint in range_constraints {
+        mark_operand(constraint.value, &mut needed);
     }
     for output in outputs {
         mark_operand(output.value, &mut needed);
@@ -77,6 +92,7 @@ fn compact_wires(
     original: &CircuitIr,
     operations: Vec<Operation>,
     constraints: Vec<Constraint>,
+    range_constraints: Vec<RangeConstraint>,
     outputs: Vec<Output>,
 ) -> CircuitIr {
     let mut used = BTreeSet::new();
@@ -96,6 +112,9 @@ fn compact_wires(
     for constraint in &constraints {
         mark_operand(constraint.lhs, &mut used);
         mark_operand(constraint.rhs, &mut used);
+    }
+    for constraint in &range_constraints {
+        mark_operand(constraint.value, &mut used);
     }
     for output in &outputs {
         mark_operand(output.value, &mut used);
@@ -135,6 +154,13 @@ fn compact_wires(
             rhs: remap_operand(constraint.rhs, &remap),
         })
         .collect::<Vec<_>>();
+    let range_constraints = range_constraints
+        .into_iter()
+        .map(|constraint| RangeConstraint {
+            value: remap_operand(constraint.value, &remap),
+            ty: constraint.ty,
+        })
+        .collect::<Vec<_>>();
     let outputs = outputs
         .into_iter()
         .map(|output| Output {
@@ -149,6 +175,7 @@ fn compact_wires(
         private_inputs,
         operations,
         constraints,
+        range_constraints,
         outputs,
         next_wire: remap.len(),
     }

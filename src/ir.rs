@@ -64,6 +64,12 @@ pub struct Constraint {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RangeConstraint {
+    pub value: Operand,
+    pub ty: Type,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output {
     pub name: String,
     pub value: Operand,
@@ -76,6 +82,7 @@ pub struct CircuitIr {
     pub private_inputs: Vec<NamedInput>,
     pub operations: Vec<Operation>,
     pub constraints: Vec<Constraint>,
+    pub range_constraints: Vec<RangeConstraint>,
     pub outputs: Vec<Output>,
     pub next_wire: WireId,
 }
@@ -90,6 +97,9 @@ pub fn lower(program: &hir::Program) -> CompileResult<CircuitIr> {
             hir::Item::Statement(hir::Statement::Let(stmt)) => {
                 let value = lowerer.lower_expr(&stmt.expr);
                 lowerer.bind(stmt.binding.id, value);
+                if stmt.binding.ty.is_uint() {
+                    lowerer.enforce_range(value, stmt.binding.ty);
+                }
             }
             hir::Item::Statement(hir::Statement::Constrain(stmt)) => {
                 let lhs = lowerer.lower_expr(&stmt.lhs);
@@ -151,6 +161,15 @@ impl fmt::Display for CircuitIr {
             }
         }
 
+        writeln!(f, "range_constraints:")?;
+        if self.range_constraints.is_empty() {
+            writeln!(f, "  <none>")?;
+        } else {
+            for constraint in &self.range_constraints {
+                writeln!(f, "  {} in {}", constraint.value, constraint.ty.name())?;
+            }
+        }
+
         writeln!(f, "outputs:")?;
         if self.outputs.is_empty() {
             writeln!(f, "  <none>")?;
@@ -199,6 +218,7 @@ impl Lowerer {
                 private_inputs: Vec::new(),
                 operations: Vec::new(),
                 constraints: Vec::new(),
+                range_constraints: Vec::new(),
                 outputs: Vec::new(),
                 next_wire: 0,
             },
@@ -213,6 +233,8 @@ impl Lowerer {
         let operand = Operand::Wire(wire);
         if input.binding.ty == Type::Bool {
             self.enforce_boolean(operand);
+        } else if input.binding.ty.is_uint() {
+            self.enforce_range(operand, input.binding.ty);
         }
         self.bind(input.binding.id, operand);
         let named_input = NamedInput {
@@ -252,11 +274,15 @@ impl Lowerer {
             ExprKind::Binary { op, lhs, rhs } => {
                 let lhs = self.lower_expr(lhs);
                 let rhs = self.lower_expr(rhs);
-                match op {
+                let value = match op {
                     BinaryOp::Add => self.add_operands(lhs, rhs),
                     BinaryOp::Sub => self.sub_operands(lhs, rhs),
                     BinaryOp::Mul => self.mul_operands(lhs, rhs),
+                };
+                if expr.ty.is_uint() {
+                    self.enforce_range(value, expr.ty);
                 }
+                value
             }
             ExprKind::IfElse {
                 condition,
@@ -291,6 +317,13 @@ impl Lowerer {
                 let overlap = self.mul_operands(lhs, rhs);
                 let doubled = self.add_operands(overlap, overlap);
                 self.sub_operands(sum, doubled)
+            }
+            ExprKind::Cast { expr, target } => {
+                let value = self.lower_expr(expr);
+                if target.is_uint() {
+                    self.enforce_range(value, *target);
+                }
+                value
             }
         }
     }
@@ -348,6 +381,22 @@ impl Lowerer {
                     lhs: product,
                     rhs: Operand::Const(FieldElement::zero()),
                 });
+            }
+        }
+    }
+
+    fn enforce_range(&mut self, operand: Operand, ty: Type) {
+        if !ty.is_uint() {
+            return;
+        }
+
+        match operand {
+            Operand::Const(value) if value.fits_in_bits(ty.uint_bits().unwrap_or(0)) => {}
+            Operand::Const(_) | Operand::Wire(_) => {
+                let constraint = RangeConstraint { value: operand, ty };
+                if !self.ir.range_constraints.contains(&constraint) {
+                    self.ir.range_constraints.push(constraint);
+                }
             }
         }
     }

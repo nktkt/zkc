@@ -22,6 +22,17 @@ fn temp_program(name: &str, source: &str) -> PathBuf {
     path
 }
 
+fn temp_text_file(name: &str, extension: &str, contents: &str) -> PathBuf {
+    let mut path = std::env::temp_dir();
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after unix epoch")
+        .as_nanos();
+    path.push(format!("zkc-{name}-{nonce}.{extension}"));
+    fs::write(&path, contents).expect("should write temporary text file");
+    path
+}
+
 fn temp_tree(name: &str, files: &[(&str, &str)]) -> PathBuf {
     let mut root = std::env::temp_dir();
     let nonce = SystemTime::now()
@@ -146,6 +157,81 @@ fn compile_json_command_emits_json_artifact() {
     assert!(stdout.contains("\"name\":\"product_check\""));
     assert!(stdout.contains("\"public_inputs\""));
     assert!(stdout.contains("\"operations\""));
+}
+
+#[test]
+fn constraints_command_emits_symbolic_equations() {
+    let output = Command::new(binary())
+        .arg("constraints")
+        .arg(repo_path("examples/product.zk"))
+        .output()
+        .expect("constraints command should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid utf-8");
+    assert!(stdout.contains("constraint system product_check"));
+    assert!(stdout.contains("[def] v2 == v0 * v1"));
+    assert!(stdout.contains("[assert] v3 == 38"));
+}
+
+#[test]
+fn constraints_command_can_emit_json() {
+    let output = Command::new(binary())
+        .arg("constraints")
+        .arg(repo_path("examples/product.zk"))
+        .arg("--json")
+        .output()
+        .expect("constraints command should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid utf-8");
+    assert!(stdout.contains("\"witnesses\""));
+    assert!(stdout.contains("\"kind\":\"definition\""));
+    assert!(stdout.contains("\"kind\":\"assertion\""));
+}
+
+#[test]
+fn constraints_command_reports_range_assertions() {
+    let output = Command::new(binary())
+        .arg("constraints")
+        .arg(repo_path("examples/integers.zk"))
+        .arg("--json")
+        .output()
+        .expect("constraints command should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid utf-8");
+    assert!(stdout.contains("\"range_assertions\""));
+    assert!(stdout.contains("\"type\":\"u8\""));
+}
+
+#[test]
+fn run_command_supports_range_checked_uints() {
+    let output = Command::new(binary())
+        .arg("run")
+        .arg(repo_path("examples/integers.zk"))
+        .args(["--public", "expected=5", "--private", "raw=3"])
+        .output()
+        .expect("run command should execute");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid utf-8");
+    assert!(stdout.contains("mixed = 5"));
+    assert!(stdout.contains("mixed_field = 5"));
+}
+
+#[test]
+fn run_command_rejects_out_of_range_uint_inputs() {
+    let output = Command::new(binary())
+        .arg("run")
+        .arg(repo_path("examples/integers.zk"))
+        .args(["--public", "expected=0", "--private", "raw=255"])
+        .output()
+        .expect("run command should execute");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be valid utf-8");
+    assert!(stderr.contains("range check failed"));
 }
 
 #[test]
@@ -285,6 +371,37 @@ fn verify_ir_command_reports_success() {
 }
 
 #[test]
+fn keygen_command_emits_debug_verification_key() {
+    let output = Command::new(binary())
+        .arg("keygen")
+        .arg(repo_path("examples/product.zk"))
+        .output()
+        .expect("keygen command should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid utf-8");
+    assert!(stdout.contains("zkc-debug-key-v1"));
+    assert!(stdout.contains("backend|debug-non-zk"));
+    assert!(stdout.contains("circuit|product_check"));
+}
+
+#[test]
+fn keygen_command_can_emit_json() {
+    let output = Command::new(binary())
+        .arg("keygen")
+        .arg(repo_path("examples/product.zk"))
+        .arg("--json")
+        .output()
+        .expect("keygen command should run");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("stdout should be valid utf-8");
+    assert!(stdout.contains("\"backend\":\"debug-non-zk\""));
+    assert!(stdout.contains("\"circuit\":\"product_check\""));
+    assert!(stdout.contains("\"constraint_digest\""));
+}
+
+#[test]
 fn analyze_command_can_emit_json() {
     let output = Command::new(binary())
         .arg("analyze")
@@ -331,6 +448,63 @@ fn witness_json_command_emits_structured_trace() {
     assert!(stdout.contains("\"backend\":\"interpreter\""));
     assert!(stdout.contains("\"wires\":["));
     assert!(stdout.contains("\"constraints\":["));
+}
+
+#[test]
+fn prove_and_verify_proof_commands_round_trip() {
+    let prove = Command::new(binary())
+        .arg("prove")
+        .arg(repo_path("examples/product.zk"))
+        .args(["--public", "x=5", "--private", "y=7"])
+        .output()
+        .expect("prove command should run");
+
+    assert!(prove.status.success());
+    let proof = String::from_utf8(prove.stdout).expect("stdout should be valid utf-8");
+    assert!(proof.contains("zkc-debug-proof-v1"));
+    assert!(proof.contains("private|y|7"));
+
+    let proof_path = temp_text_file("debug-proof", "txt", &proof);
+    let verify = Command::new(binary())
+        .arg("verify-proof")
+        .arg(repo_path("examples/product.zk"))
+        .arg(&proof_path)
+        .output()
+        .expect("verify-proof command should run");
+
+    assert!(verify.status.success());
+    let stdout = String::from_utf8(verify.stdout).expect("stdout should be valid utf-8");
+    assert!(stdout.contains("verified debug proof for product_check via debug-non-zk"));
+
+    let _ = fs::remove_file(proof_path);
+}
+
+#[test]
+fn verify_proof_command_rejects_tampering() {
+    let prove = Command::new(binary())
+        .arg("prove")
+        .arg(repo_path("examples/product.zk"))
+        .args(["--public", "x=5", "--private", "y=7"])
+        .output()
+        .expect("prove command should run");
+
+    assert!(prove.status.success());
+    let proof = String::from_utf8(prove.stdout).expect("stdout should be valid utf-8");
+    let tampered = proof.replace("output|product|35", "output|product|36");
+    let proof_path = temp_text_file("tampered-proof", "txt", &tampered);
+
+    let verify = Command::new(binary())
+        .arg("verify-proof")
+        .arg(repo_path("examples/product.zk"))
+        .arg(&proof_path)
+        .output()
+        .expect("verify-proof command should run");
+
+    assert!(!verify.status.success());
+    let stderr = String::from_utf8(verify.stderr).expect("stderr should be valid utf-8");
+    assert!(stderr.contains("debug proof artifact does not match re-executed circuit trace"));
+
+    let _ = fs::remove_file(proof_path);
 }
 
 #[test]

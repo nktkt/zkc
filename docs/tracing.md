@@ -15,7 +15,7 @@ cargo run -- trace examples/product.zk --public x=5 --private y=7
 Example output:
 
 ```text
-execution trace for product_check via interpreter over field modulus 18446744073709551557
+execution trace for product_check via interpreter over field modulus 21888242871839275222246405745257275088548364400416034343698204186575808495617
 public inputs:
   x = 5
 private inputs:

@@ -9,6 +9,7 @@ pub struct CircuitReport {
     pub private_inputs: usize,
     pub outputs: usize,
     pub constraints: usize,
+    pub range_constraints: usize,
     pub wires: usize,
     pub operations: OperationCounts,
     pub constant_operands: usize,
@@ -58,6 +59,10 @@ pub fn analyze(ir: &CircuitIr) -> CircuitReport {
         count_operand(constraint.rhs, &mut constant_operands, &mut wire_operands);
     }
 
+    for constraint in &ir.range_constraints {
+        count_operand(constraint.value, &mut constant_operands, &mut wire_operands);
+    }
+
     for output in &ir.outputs {
         count_operand(output.value, &mut constant_operands, &mut wire_operands);
     }
@@ -68,6 +73,7 @@ pub fn analyze(ir: &CircuitIr) -> CircuitReport {
         private_inputs: ir.private_inputs.len(),
         outputs: ir.outputs.len(),
         constraints: ir.constraints.len(),
+        range_constraints: ir.range_constraints.len(),
         wires: ir.next_wire,
         operations,
         constant_operands,
@@ -85,6 +91,7 @@ impl CircuitReport {
                 "\"private_inputs\":{},",
                 "\"outputs\":{},",
                 "\"constraints\":{},",
+                "\"range_constraints\":{},",
                 "\"wires\":{},",
                 "\"operations\":{{\"add\":{},\"sub\":{},\"mul\":{},\"total\":{}}},",
                 "\"operands\":{{\"constant\":{},\"wire\":{}}}",
@@ -95,6 +102,7 @@ impl CircuitReport {
             self.private_inputs,
             self.outputs,
             self.constraints,
+            self.range_constraints,
             self.wires,
             self.operations.add,
             self.operations.sub,
@@ -116,6 +124,7 @@ impl fmt::Display for CircuitReport {
         )?;
         writeln!(f, "outputs: {}", self.outputs)?;
         writeln!(f, "constraints: {}", self.constraints)?;
+        writeln!(f, "range constraints: {}", self.range_constraints)?;
         writeln!(f, "wires: {}", self.wires)?;
         writeln!(
             f,

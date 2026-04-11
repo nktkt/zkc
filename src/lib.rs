@@ -5,15 +5,18 @@ pub mod ast;
 pub mod backend;
 pub mod builtins;
 pub mod compiler;
+pub mod constraint;
 pub mod error;
 pub mod eval;
 pub mod field;
+pub mod groth16;
 pub mod hir;
 pub mod ir;
 pub mod lexer;
 pub mod optimize;
 pub mod parser;
 pub mod pretty;
+pub mod proof;
 pub mod serialize;
 pub mod source;
 pub mod span;
@@ -22,8 +25,9 @@ pub mod typecheck;
 pub mod verify;
 
 pub use compiler::{
-    compile_path, compile_source, dependency_graph, parse_and_typecheck, parse_and_typecheck_path,
-    parse_and_validate, parse_and_validate_path,
+    compile_constraints_path, compile_constraints_source, compile_path, compile_source,
+    dependency_graph, parse_and_typecheck, parse_and_typecheck_path, parse_and_validate,
+    parse_and_validate_path,
 };
 pub use source::stdlib_catalog;
 
@@ -34,6 +38,7 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use crate::compile_constraints_source;
     use crate::compile_path;
     use crate::compile_source;
     use crate::dependency_graph;
@@ -42,6 +47,7 @@ mod tests {
     use crate::ir::{CircuitIr, Constraint, NamedInput, Operand, Output};
     use crate::optimize::optimize;
     use crate::pretty::render_program;
+    use crate::proof::{debug_keygen, debug_prove, parse_debug_proof, verify_debug_proof};
     use crate::source::resolve_program;
     use crate::stdlib_catalog;
     use crate::trace::trace_execution;
@@ -75,6 +81,47 @@ circuit product_check {
         assert_eq!(result.outputs[0].1, FieldElement::from_i128(35));
         assert_eq!(result.outputs[1].0, "shifted_value");
         assert_eq!(result.outputs[1].1, FieldElement::from_i128(38));
+    }
+
+    #[test]
+    fn lowers_wire_ir_into_constraint_ir() {
+        let constraints =
+            compile_constraints_source(SAMPLE).expect("sample program should lower to constraints");
+
+        assert_eq!(constraints.public_inputs.len(), 1);
+        assert_eq!(constraints.private_inputs.len(), 1);
+        assert_eq!(constraints.witnesses.len(), 2);
+        assert_eq!(constraints.equations.len(), 3);
+        assert_eq!(constraints.outputs.len(), 2);
+
+        let rendered = constraints.to_string();
+        assert!(rendered.contains("[def] v2 == v0 * v1"));
+        assert!(rendered.contains("[def] v3 == v2 + 3"));
+        assert!(rendered.contains("[assert] v3 == 38"));
+        assert!(constraints.to_json().contains("\"kind\":\"definition\""));
+        assert!(constraints.to_json().contains("\"kind\":\"assert\""));
+    }
+
+    #[test]
+    fn constraint_ir_preserves_range_assertions() {
+        let source = r#"
+circuit ints {
+    public expected: u8;
+    private raw: field;
+
+    let byte = into_u8(raw);
+    constrain byte == expected;
+    expose byte;
+}
+"#;
+
+        let constraints = compile_constraints_source(source)
+            .expect("integer program should lower to constraints");
+        assert_eq!(constraints.range_assertions.len(), 2);
+        let rendered = constraints.to_string();
+        assert!(rendered.contains("v0 in u8"));
+        assert!(rendered.contains("v1 in u8"));
+        assert!(constraints.to_json().contains("\"range_assertions\""));
     }
 
     #[test]
@@ -246,6 +293,71 @@ circuit builtins {
     }
 
     #[test]
+    fn compiles_and_executes_range_checked_uints() {
+        let source = r#"
+circuit ints {
+    public expected: u8;
+    private raw: field;
+
+    let base = into_u8(raw);
+    let bumped = base + 1;
+    let mixed = bumped * 2 - 3;
+    constrain mixed == expected;
+    expose mixed;
+    expose into_field(mixed) as mixed_field;
+}
+"#;
+
+        let ir = compile_source(source).expect("integer program should compile");
+        assert_eq!(ir.range_constraints.len(), 5);
+
+        let mut inputs = RuntimeInputs::default();
+        inputs.insert_public("expected", FieldElement::from_i128(5));
+        inputs.insert_private("raw", FieldElement::from_i128(3));
+
+        let result = execute(&ir, &inputs).expect("range-checked witness should satisfy");
+        assert_eq!(result.outputs[0].1, FieldElement::from_i128(5));
+        assert_eq!(result.outputs[1].1, FieldElement::from_i128(5));
+    }
+
+    #[test]
+    fn rejects_out_of_range_uint_values_at_runtime() {
+        let source = r#"
+circuit ints {
+    public expected: u8;
+    public byte: u8;
+
+    let bumped = byte + 1;
+    constrain bumped == expected;
+    expose bumped;
+}
+"#;
+
+        let ir = compile_source(source).expect("integer program should compile");
+        let mut inputs = RuntimeInputs::default();
+        inputs.insert_public("expected", FieldElement::from_i128(0));
+        inputs.insert_public("byte", FieldElement::from_i128(255));
+
+        let err = execute(&ir, &inputs).expect_err("out-of-range witness should fail");
+        assert!(err.message.contains("range check failed"));
+    }
+
+    #[test]
+    fn rejects_mixed_uint_arithmetic_without_explicit_conversion() {
+        let source = r#"
+circuit broken {
+    public small: u8;
+    public large: u16;
+    let y = small + large;
+    expose y;
+}
+"#;
+
+        let err = compile_source(source).expect_err("mixed integer arithmetic should fail");
+        assert!(err.message.contains("matching unsigned integers"));
+    }
+
+    #[test]
     fn rejects_duplicate_builtin_names() {
         let source = r#"
 circuit broken {
@@ -329,6 +441,23 @@ circuit broken {
     }
 
     #[test]
+    fn rejects_arithmetic_on_uint_values_without_conversion() {
+        let source = r#"
+circuit broken {
+    public byte: u8;
+    let y = byte + 1;
+    expose y;
+}
+"#;
+
+        let err = compile_source(source).expect_err("uint arithmetic should fail");
+        assert!(
+            err.message
+                .contains("convert integer values with `into_field(...)` first")
+        );
+    }
+
+    #[test]
     fn rejects_if_branch_type_mismatches() {
         let source = r#"
 circuit broken {
@@ -391,6 +520,7 @@ circuit optimize_demo {
                 lhs: Operand::Wire(1),
                 rhs: Operand::Const(FieldElement::zero()),
             }],
+            range_constraints: Vec::new(),
             outputs: vec![Output {
                 name: "out".to_string(),
                 value: Operand::Wire(1),
@@ -621,6 +751,62 @@ let y = 1;
         );
         assert!(catalog.total_lines > 0);
         assert!(catalog.to_json().contains("\"total_modules\""));
+    }
+
+    #[test]
+    fn debug_keygen_reports_circuit_metadata() {
+        let ir = compile_source(SAMPLE).expect("sample program should compile");
+        let key = debug_keygen(&ir);
+
+        assert_eq!(key.backend, "debug-non-zk");
+        assert_eq!(key.circuit, "product_check");
+        assert_eq!(key.public_inputs.len(), 1);
+        assert_eq!(key.private_inputs.len(), 1);
+        assert_eq!(key.outputs.len(), 2);
+        assert_eq!(key.equations, 3);
+        assert_eq!(key.range_assertions, 0);
+        assert_eq!(key.wires, ir.next_wire);
+        assert!(key.to_text().contains("zkc-debug-key-v1"));
+        assert!(key.to_json().contains("\"backend\":\"debug-non-zk\""));
+    }
+
+    #[test]
+    fn debug_proof_round_trip_verifies() {
+        let ir = compile_source(SAMPLE).expect("sample program should compile");
+        let mut inputs = RuntimeInputs::default();
+        inputs.insert_public("x", FieldElement::from_i128(5));
+        inputs.insert_private("y", FieldElement::from_i128(7));
+
+        let proof = debug_prove(&ir, &inputs).expect("debug proof should be generated");
+        let encoded = proof.to_text();
+        let parsed = parse_debug_proof(&encoded).expect("proof should parse");
+        let report = verify_debug_proof(&ir, &parsed).expect("debug proof should verify");
+
+        assert_eq!(report.backend, "debug-non-zk");
+        assert_eq!(report.circuit, "product_check");
+        assert_eq!(report.public_inputs, 1);
+        assert_eq!(report.private_inputs, 1);
+        assert_eq!(report.outputs, 2);
+        assert_eq!(report.wires, ir.next_wire);
+        assert!(proof.to_json().contains("\"trace_digest\""));
+        assert!(report.to_json().contains("\"circuit\":\"product_check\""));
+    }
+
+    #[test]
+    fn debug_verifier_rejects_tampered_proof() {
+        let ir = compile_source(SAMPLE).expect("sample program should compile");
+        let mut inputs = RuntimeInputs::default();
+        inputs.insert_public("x", FieldElement::from_i128(5));
+        inputs.insert_private("y", FieldElement::from_i128(7));
+
+        let mut proof = debug_prove(&ir, &inputs).expect("debug proof should be generated");
+        proof.outputs[0].value = FieldElement::from_i128(999);
+
+        let err = verify_debug_proof(&ir, &proof).expect_err("tampered proof should fail");
+        assert!(
+            err.message
+                .contains("debug proof artifact does not match re-executed circuit trace")
+        );
     }
 
     fn temp_tree(files: &[(&str, &str)]) -> PathBuf {

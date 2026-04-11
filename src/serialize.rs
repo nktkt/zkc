@@ -1,4 +1,6 @@
-use crate::ir::{CircuitIr, Constraint, NamedInput, OpKind, Operand, Operation, Output};
+use crate::ir::{
+    CircuitIr, Constraint, NamedInput, OpKind, Operand, Operation, Output, RangeConstraint,
+};
 
 pub fn ir_to_json(ir: &CircuitIr) -> String {
     let mut out = String::new();
@@ -35,6 +37,12 @@ pub fn ir_to_json(ir: &CircuitIr) -> String {
         &json_array(&ir.constraints, constraint_json),
     );
     out.push(',');
+    push_field(
+        &mut out,
+        "range_constraints",
+        &json_array(&ir.range_constraints, range_constraint_json),
+    );
+    out.push(',');
     push_field(&mut out, "outputs", &json_array(&ir.outputs, output_json));
     out.push(',');
     push_field(&mut out, "next_wire", &ir.next_wire.to_string());
@@ -54,10 +62,7 @@ fn named_input_json(input: &NamedInput) -> String {
         ),
         input.binding,
         json_string(&input.name),
-        match input.ty {
-            crate::ast::Type::Field => "field",
-            crate::ast::Type::Bool => "bool",
-        },
+        input.ty.name(),
         input.wire
     )
 }
@@ -98,6 +103,14 @@ fn output_json(output: &Output) -> String {
         "{{\"name\":{},\"value\":{}}}",
         json_string(&output.name),
         operand_json(output.value)
+    )
+}
+
+fn range_constraint_json(constraint: &RangeConstraint) -> String {
+    format!(
+        "{{\"value\":{},\"type\":{}}}",
+        operand_json(constraint.value),
+        json_string(constraint.ty.name())
     )
 }
 

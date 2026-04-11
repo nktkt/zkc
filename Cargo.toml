@@ -10,3 +10,11 @@ keywords = ["zk", "compiler", "dsl", "cryptography"]
 categories = ["compilers", "cryptography"]
 
 [dependencies]
+ark-bn254 = "0.5.0"
+ark-ff = "0.5.0"
+ark-groth16 = "0.5.0"
+ark-relations = "0.5.1"
+ark-serialize = "0.5.0"
+ark-snark = "0.5.1"
+num-bigint = "0.4.6"
+rand = "0.8.5"

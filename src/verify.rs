@@ -69,6 +69,10 @@ pub fn verify(ir: &CircuitIr) -> CompileResult<()> {
         ensure_operand_defined(constraint.rhs, &defined)?;
     }
 
+    for constraint in &ir.range_constraints {
+        ensure_operand_defined(constraint.value, &defined)?;
+    }
+
     for output in &ir.outputs {
         ensure_operand_defined(output.value, &defined)?;
     }

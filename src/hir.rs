@@ -114,6 +114,10 @@ pub enum ExprKind {
         lhs: Box<TypedExpr>,
         rhs: Box<TypedExpr>,
     },
+    Cast {
+        expr: Box<TypedExpr>,
+        target: Type,
+    },
 }
 
 impl TypedExpr {
@@ -131,5 +135,9 @@ impl TypedExpr {
             ty: Type::Bool,
             span,
         }
+    }
+
+    pub fn new(kind: ExprKind, ty: Type, span: Span) -> Self {
+        Self { kind, ty, span }
     }
 }

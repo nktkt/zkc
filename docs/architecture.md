@@ -10,6 +10,7 @@ source
   -> parser
   -> AST
   -> typed HIR
+  -> constraint IR
   -> arithmetic circuit IR
   -> analysis / serialization
   -> backend execution
@@ -68,7 +69,7 @@ Current responsibilities:
 - duplicate detection
 - use-before-declaration rejection
 - typed expression construction
-- scalar typechecking for `field` and `bool`
+- scalar typechecking for `field`, `bool`, `u8`, `u16`, and `u32`
 - function-call validation and inlining
 - conditional typing and branch compatibility checks
 
@@ -84,8 +85,24 @@ between source semantics and backend-ready circuit semantics.
 Current lowering behavior also handles:
 
 - boolean input constraints
+- unsigned integer range assertions
 - boolean builtins through arithmetic encodings
 - `if` expressions via selector-style arithmetic combinations
+
+### Constraint IR
+
+`src/constraint.rs`
+
+This stage provides a backend-neutral, symbolic equation view of the lowered circuit. It is
+currently derived from the arithmetic circuit IR and exists to make future prover backends target a
+more stable algebraic interface.
+
+Current responsibilities:
+
+- symbolic variable registration for inputs and witnesses
+- definition equations derived from wire-producing operations
+- assertion equations derived from equality constraints
+- human-readable and JSON inspection through the CLI
 
 ### Witness Execution
 
@@ -94,6 +111,32 @@ Current lowering behavior also handles:
 The repository now has an explicit backend boundary. The current backend is an interpreter that
 executes the lowered circuit given explicit public and private inputs, checks all constraints, and
 returns named public outputs.
+
+### Debug Proof Artifacts
+
+`src/proof.rs`
+
+This module adds a deterministic `debug-non-zk` artifact flow:
+
+- `keygen` emits circuit metadata and constraint digests
+- `prove` records public inputs, private inputs, exposed outputs, and wire assignments
+- `verify-proof` re-executes the circuit and rejects any artifact drift
+
+This is intentionally a compiler-testing backend, not a cryptographic proof system. It exposes the
+entire witness and therefore does not provide zero knowledge.
+
+### Groth16 Backend
+
+`src/groth16.rs`
+
+This module lowers `CircuitIr` into `R1CS` constraints and targets `Groth16(BN254)`:
+
+- circuit-specific setup produces proving and verification keys
+- proving consumes explicit witness assignments and emits a proof artifact plus public I/O
+- verification checks the proof against the compiled circuit shape and bundled public values
+
+This is the first real cryptographic backend in the repository. It is still experimental and does
+not yet carry the operational guarantees required for production use.
 
 ### Analysis and Serialization
 
@@ -139,11 +182,18 @@ Provides user-facing commands:
 - `deps`
 - `resolve`
 - `verify-ir`
+- `keygen`
+- `setup-groth16`
 - `compile`
+- `constraints`
 - `compile-json`
 - `analyze`
 - `optimize`
 - `trace`
+- `prove`
+- `prove-groth16`
+- `verify-proof`
+- `verify-groth16`
 - `witness-json`
 - `run`
 
@@ -152,8 +202,10 @@ Provides user-facing commands:
 The current repository is a compiler prototype, not a production proof system. It has the following
 important constraints:
 
-- no prover backend
-- no verifier backend
+- Groth16 is the only cryptographic backend today
+- no audited or hardened cryptographic backend
+- debug proof artifacts expose private inputs and full witness data
+- Groth16 setup is circuit-specific and requires trusted setup material handling
 - no audited soundness proof
 - no compatibility guarantees for IR or CLI output
 
